@@ -24,7 +24,6 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
   final _auth = AuthService();
   Timer? _searchDebounce;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _profileStream;
-  Timer? _homeRefreshTimer;
   bool _homeLoading = true;
   bool _homeRefreshing = false;
   String? _homeError;
@@ -42,10 +41,6 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
           .doc(user.uid)
           .snapshots();
       _refreshHomeData(initialLoad: true);
-      _homeRefreshTimer = Timer.periodic(
-        const Duration(seconds: 3),
-        (_) => _refreshHomeData(),
-      );
     } else {
       _homeLoading = false;
     }
@@ -54,7 +49,6 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
-    _homeRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -166,44 +160,37 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
           .collection('favoriteStats')
           .doc(placeId);
 
-      if (isFav) {
-        // Remove from favorites
-        await userDoc.update({
-          'favorites': FieldValue.arrayRemove([placeId]),
-        });
-        // Decrement count in favoriteStats - use transaction to handle non-existent doc
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final snapshot = await transaction.get(statsDoc);
-          if (snapshot.exists) {
-            final currentCount = snapshot.data()?['count'] as int? ?? 0;
-            final newCount = (currentCount - 1)
-                .clamp(0, double.infinity)
-                .toInt();
-            if (newCount > 0) {
-              transaction.update(statsDoc, {'count': newCount});
-            } else {
-              // Delete the document if count becomes 0
-              transaction.delete(statsDoc);
-            }
-          }
-        });
-      } else {
-        // Add to favorites
-        await userDoc.update({
-          'favorites': FieldValue.arrayUnion([placeId]),
-        });
-        // Increment count in favoriteStats - use transaction to handle non-existent doc
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final snapshot = await transaction.get(statsDoc);
-          if (snapshot.exists) {
-            final currentCount = snapshot.data()?['count'] as int? ?? 0;
-            transaction.update(statsDoc, {'count': currentCount + 1});
-          } else {
-            // Create new document with count = 1
-            transaction.set(statsDoc, {'count': 1});
-          }
-        });
-      }
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final userSnapshot = await transaction.get(userDoc);
+        final statsSnapshot = await transaction.get(statsDoc);
+
+        final currentFavorites = List<String>.from(
+          (userSnapshot.data()?['favorites'] as List<dynamic>? ?? const []).map(
+            (e) => e.toString(),
+          ),
+        );
+
+        if (isFav) {
+          currentFavorites.remove(placeId);
+        } else if (!currentFavorites.contains(placeId)) {
+          currentFavorites.add(placeId);
+        }
+
+        transaction.set(userDoc, {
+          'favorites': currentFavorites,
+        }, SetOptions(merge: true));
+
+        final currentCount = (statsSnapshot.data()?['count'] as int?) ?? 0;
+        final newCount = isFav ? (currentCount - 1) : (currentCount + 1);
+
+        if (newCount > 0) {
+          transaction.set(statsDoc, {
+            'count': newCount,
+          }, SetOptions(merge: true));
+        } else {
+          transaction.delete(statsDoc);
+        }
+      });
       _refreshHomeData();
     } catch (e) {
       await _refreshHomeData();
@@ -248,27 +235,72 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 1000;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Column(
+        child: Row(
           children: [
-            if (_tabIndex != 2)
-              TourSelectionHeader(onSearchChanged: _onSearchChanged),
-
-            // Content
-            Expanded(child: _buildContent()),
+            if (isDesktop) _buildDesktopNavigationRail(),
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: Column(
+                    children: [
+                      if (_tabIndex != 2)
+                        TourSelectionHeader(onSearchChanged: _onSearchChanged),
+                      Expanded(child: _buildContent()),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
-      bottomNavigationBar: TourSelectionBottomNav(
-        selectedIndex: _tabIndex,
-        onTap: (index) => setState(() {
-          _tabIndex = index;
-          _query = '';
-          _debouncedQuery = '';
-        }),
-      ),
+      bottomNavigationBar: isDesktop
+          ? null
+          : TourSelectionBottomNav(
+              selectedIndex: _tabIndex,
+              onTap: _onTabChanged,
+            ),
+    );
+  }
+
+  void _onTabChanged(int index) {
+    setState(() {
+      _tabIndex = index;
+      _query = '';
+      _debouncedQuery = '';
+    });
+  }
+
+  Widget _buildDesktopNavigationRail() {
+    return NavigationRail(
+      selectedIndex: _tabIndex,
+      onDestinationSelected: _onTabChanged,
+      labelType: NavigationRailLabelType.all,
+      destinations: const [
+        NavigationRailDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: Text('Home'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.favorite_border),
+          selectedIcon: Icon(Icons.favorite),
+          label: Text('Wishlist'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.person_outline),
+          selectedIcon: Icon(Icons.person),
+          label: Text('Profile'),
+        ),
+      ],
     );
   }
 
@@ -292,18 +324,78 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
         .where((doc) => _matchesQuery((doc.data()['title'] ?? '').toString()))
         .toList(growable: false);
 
-    return Stack(
-      children: [
-        CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final isDesktop = width >= 1000;
+        final horizontalPadding = isDesktop ? 24.0 : 16.0;
+        final popularHeight = isDesktop ? 240.0 : 200.0;
+        final popularCardWidth = isDesktop ? 240.0 : 160.0;
+        final crossAxisCount = width >= 1200
+            ? 4
+            : width >= 900
+            ? 3
+            : 2;
+
+        return Stack(
+          children: [
+            CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                        ),
+                        child: Text(
+                          'Popular Destination',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: popularHeight,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                          ),
+                          itemCount: _cachedPopularPlaces.length,
+                          itemBuilder: (context, index) {
+                            final doc = _cachedPopularPlaces[index];
+                            final data = doc.data();
+                            return PopularPlaceCard(
+                              width: popularCardWidth,
+                              title: (data['title'] ?? '').toString(),
+                              location: (data['location'] ?? '').toString(),
+                              imageUrl: (data['imageUrl'] ?? '').toString(),
+                              isFavorite: _cachedFavorites.contains(doc.id),
+                              onToggleFavorite: () => _toggleFavorite(
+                                doc.id,
+                                _cachedFavorites.contains(doc.id),
+                              ),
+                              onTap: () => _openPlaceDetail(doc.id, data),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                    ),
                     child: Text(
-                      'Popular Destination',
+                      'Discover Places',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -311,92 +403,57 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _cachedPopularPlaces.length,
-                      itemBuilder: (context, index) {
-                        final doc = _cachedPopularPlaces[index];
-                        final data = doc.data();
-                        return PopularPlaceCard(
-                          title: (data['title'] ?? '').toString(),
-                          location: (data['location'] ?? '').toString(),
-                          imageUrl: (data['imageUrl'] ?? '').toString(),
-                          isFavorite: _cachedFavorites.contains(doc.id),
-                          onToggleFavorite: () => _toggleFavorite(
-                            doc.id,
-                            _cachedFavorites.contains(doc.id),
-                          ),
-                          onTap: () => _openPlaceDetail(doc.id, data),
-                        );
-                      },
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: isDesktop ? 0.95 : 0.8,
                     ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final doc = filteredDocs[index];
+                      final data = doc.data();
+                      return DiscoverPlaceCard(
+                        title: (data['title'] ?? '').toString(),
+                        location: (data['location'] ?? '').toString(),
+                        imageUrl: (data['imageUrl'] ?? '').toString(),
+                        isFavorite: _cachedFavorites.contains(doc.id),
+                        onToggleFavorite: () => _toggleFavorite(
+                          doc.id,
+                          _cachedFavorites.contains(doc.id),
+                        ),
+                        onTap: () => _openPlaceDetail(doc.id, data),
+                      );
+                    }, childCount: filteredDocs.length),
                   ),
-                ],
-              ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              ],
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            if (_homeRefreshing)
+              const Positioned(
+                top: 8,
+                right: 16,
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            if (_homeError != null && _cachedPlaces.isEmpty)
+              Center(
                 child: Text(
-                  'Discover Places',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
+                  _homeError!,
+                  style: const TextStyle(color: Colors.red),
                 ),
               ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.8,
-                ),
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final doc = filteredDocs[index];
-                  final data = doc.data();
-                  return DiscoverPlaceCard(
-                    title: (data['title'] ?? '').toString(),
-                    location: (data['location'] ?? '').toString(),
-                    imageUrl: (data['imageUrl'] ?? '').toString(),
-                    isFavorite: _cachedFavorites.contains(doc.id),
-                    onToggleFavorite: () => _toggleFavorite(
-                      doc.id,
-                      _cachedFavorites.contains(doc.id),
-                    ),
-                    onTap: () => _openPlaceDetail(doc.id, data),
-                  );
-                }, childCount: filteredDocs.length),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
           ],
-        ),
-        if (_homeRefreshing)
-          const Positioned(
-            top: 8,
-            right: 16,
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        if (_homeError != null && _cachedPlaces.isEmpty)
-          Center(
-            child: Text(_homeError!, style: const TextStyle(color: Colors.red)),
-          ),
-      ],
+        );
+      },
     );
   }
 
@@ -412,9 +469,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
           ? (data['distanceKm'] as num).toDouble()
           : 0.0,
       favoriteCount: 0,
-      temperatureC: (data['temperatureC'] is num)
-          ? (data['temperatureC'] as num).toDouble()
-          : 0.0,
+      weatherCondition: (data['weatherCondition'] ?? 'Unknown').toString(),
       description: (data['description'] ?? 'No description available')
           .toString(),
     );
@@ -457,58 +512,78 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.8,
-        ),
-        itemCount: favoritePlaces.length,
-        itemBuilder: (context, index) {
-          final doc = favoritePlaces[index];
-          final data = doc.data();
-          return DiscoverPlaceCard(
-            title: (data['title'] ?? '').toString(),
-            location: (data['location'] ?? '').toString(),
-            imageUrl: (data['imageUrl'] ?? '').toString(),
-            isFavorite: true,
-            onToggleFavorite: () => _toggleFavorite(doc.id, true),
-            onTap: () => _openPlaceDetail(doc.id, data),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final isDesktop = width >= 1000;
+        final crossAxisCount = width >= 1200
+            ? 4
+            : width >= 900
+            ? 3
+            : 2;
+
+        return Padding(
+          padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
+          child: GridView.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: isDesktop ? 0.95 : 0.8,
+            ),
+            itemCount: favoritePlaces.length,
+            itemBuilder: (context, index) {
+              final doc = favoritePlaces[index];
+              final data = doc.data();
+              return DiscoverPlaceCard(
+                title: (data['title'] ?? '').toString(),
+                location: (data['location'] ?? '').toString(),
+                imageUrl: (data['imageUrl'] ?? '').toString(),
+                isFavorite: true,
+                onToggleFavorite: () => _toggleFavorite(doc.id, true),
+                onTap: () => _openPlaceDetail(doc.id, data),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildProfileContent() {
     final user = FirebaseAuth.instance.currentUser;
-    return Center(
-      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _profileStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const CircularProgressIndicator();
-          }
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 860),
+        child: Center(
+          child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: _profileStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator();
+              }
 
-          final userData = snapshot.data?.data();
-          final username = (userData?['username'] ?? 'User') as String;
-          final photoUrl = (userData?['photoUrl'] ?? '') as String;
+              final userData = snapshot.data?.data();
+              final username = (userData?['username'] ?? 'User') as String;
+              final photoUrl = (userData?['photoUrl'] ?? '') as String;
 
-          return TourProfileContent(
-            username: username,
-            email: user?.email ?? '',
-            photoUrl: photoUrl,
-            onEditProfile: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileSetupScreen()),
+              return TourProfileContent(
+                username: username,
+                email: user?.email ?? '',
+                photoUrl: photoUrl,
+                onEditProfile: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ProfileSetupScreen(),
+                    ),
+                  );
+                },
+                onLogout: _logout,
               );
             },
-            onLogout: _logout,
-          );
-        },
+          ),
+        ),
       ),
     );
   }

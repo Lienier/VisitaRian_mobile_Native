@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'admin_access.dart';
 import 'xr_firestore.dart';
@@ -10,12 +12,16 @@ class NodeEditorScreen extends StatefulWidget {
   final String tourId;
   final String nodeId;
   final XrFirestore? xrFirestore;
+  final bool embedded;
+  final VoidCallback? onSaved;
 
   const NodeEditorScreen({
     super.key,
     required this.tourId,
     required this.nodeId,
     this.xrFirestore,
+    this.embedded = false,
+    this.onSaved,
   });
 
   @override
@@ -202,7 +208,11 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Node saved.')));
-      Navigator.of(context).pop();
+      if (widget.embedded) {
+        widget.onSaved?.call();
+      } else {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -245,6 +255,275 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
     final y = ((90.0 - clampedPitch) / 180.0) * size.height;
 
     return Offset(x, y);
+  }
+
+  bool _isNetworkUrl(String value) {
+    return value.startsWith('http://') || value.startsWith('https://');
+  }
+
+  Future<String?> _resolvePreviewUrl(String rawUrl) async {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return null;
+
+    if (_isNetworkUrl(trimmed)) {
+      return trimmed;
+    }
+
+    if (trimmed.startsWith('gs://')) {
+      try {
+        return await FirebaseStorage.instance
+            .refFromURL(trimmed)
+            .getDownloadURL();
+      } catch (_) {
+        // Fall through to path-based resolution.
+      }
+    }
+
+    try {
+      return await FirebaseStorage.instance
+          .ref()
+          .child(trimmed)
+          .getDownloadURL();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<_TeleportPreviewData?> _loadTeleportPreview(
+    String targetNodeId,
+  ) async {
+    final nodeId = targetNodeId.trim();
+    if (nodeId.isEmpty) return null;
+
+    final snapshot = await _xrFirestore.getNode(
+      tourId: widget.tourId,
+      nodeId: nodeId,
+    );
+
+    if (!snapshot.exists) {
+      return _TeleportPreviewData(
+        nodeId: nodeId,
+        title: '',
+        panoUrl: '',
+        resolvedPreviewUrl: null,
+        error: 'Target node not found.',
+      );
+    }
+
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    final title = (data['name'] ?? '').toString().trim();
+    final panoUrl = (data['panoUrl'] ?? '').toString().trim();
+    final resolved = await _resolvePreviewUrl(panoUrl);
+
+    return _TeleportPreviewData(
+      nodeId: snapshot.id,
+      title: title,
+      panoUrl: panoUrl,
+      resolvedPreviewUrl: resolved,
+      error: null,
+    );
+  }
+
+  Widget _buildTeleportPreview(_EditableHotspot hotspot) {
+    final targetNodeId = hotspot.toNodeIdController.text.trim();
+    if (targetNodeId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return FutureBuilder<_TeleportPreviewData?>(
+      future: _loadTeleportPreview(targetNodeId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: SizedBox(
+              height: 44,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Preview unavailable: ${snapshot.error}',
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+          );
+        }
+
+        final preview = snapshot.data;
+        if (preview == null) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.black.withValues(alpha: 0.02),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  preview.title.isEmpty ? preview.nodeId : preview.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Node ID: ${preview.nodeId}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await Clipboard.setData(
+                        ClipboardData(text: preview.nodeId),
+                      );
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Node ID copied.')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copy Node ID'),
+                  ),
+                ),
+                if (preview.error != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    preview.error!,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                ] else if (preview.resolvedPreviewUrl != null) ...[
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        preview.resolvedPreviewUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const ColoredBox(
+                            color: Color(0xFF263238),
+                            child: Center(
+                              child: Text(
+                                'Failed to load preview image',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No preview image available for this target node.',
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickTargetNodeFromList(_EditableHotspot hotspot) async {
+    final selectedNodeId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Pick Target Node'),
+          content: SizedBox(
+            width: 560,
+            height: 420,
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _xrFirestore.nodesStream(widget.tourId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Failed to load nodes: ${snapshot.error}'),
+                  );
+                }
+
+                final docs = snapshot.data?.docs ?? const [];
+                final candidates = docs
+                    .where((doc) => doc.id != widget.nodeId)
+                    .toList(growable: false);
+
+                if (candidates.isEmpty) {
+                  return const Center(
+                    child: Text('No other nodes available in this tour.'),
+                  );
+                }
+
+                return ListView.separated(
+                  itemCount: candidates.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final doc = candidates[index];
+                    final data = doc.data();
+                    final name = (data['name'] ?? '').toString().trim();
+                    final panoUrl = (data['panoUrl'] ?? '').toString().trim();
+
+                    return ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      title: Text(name.isEmpty ? doc.id : name),
+                      subtitle: Text(
+                        'Node ID: ${doc.id}\n$panoUrl',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      isThreeLine: true,
+                      trailing: IconButton(
+                        tooltip: 'Copy node ID',
+                        icon: const Icon(Icons.copy, size: 18),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          await Clipboard.setData(ClipboardData(text: doc.id));
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Node ID copied.')),
+                          );
+                        },
+                      ),
+                      onTap: () => Navigator.of(dialogContext).pop(doc.id),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selectedNodeId == null) return;
+    setState(() {
+      hotspot.toNodeIdController.text = selectedNodeId;
+    });
   }
 
   Widget _buildHotspotPreview() {
@@ -495,17 +774,106 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
               ),
             ],
             if (hotspot.type == 'teleport') ...[
-              TextFormField(
-                controller: hotspot.toNodeIdController,
-                decoration: const InputDecoration(labelText: 'Target nodeId'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: hotspot.toNodeIdController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Target nodeId',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _pickTargetNodeFromList(hotspot),
+                    icon: const Icon(Icons.list_alt, size: 18),
+                    label: const Text('Pick'),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: hotspot.labelController,
                 decoration: const InputDecoration(labelText: 'Teleport label'),
               ),
+              _buildTeleportPreview(hotspot),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditorBody(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Node name'),
+                  validator: (value) => _validateRequired(value, 'Node name'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _panoUrlController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Panorama URL (Firebase Storage URL)',
+                  ),
+                  validator: (value) =>
+                      _validateRequired(value, 'Panorama URL'),
+                ),
+                const SizedBox(height: 16),
+                _buildHotspotPreview(),
+                Row(
+                  children: [
+                    Text(
+                      'Hotspots',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    OutlinedButton.icon(
+                      onPressed: () => _addHotspot('info'),
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('Add Info'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _addHotspot('teleport'),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Add Teleport'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_hotspots.isEmpty)
+                  const Text('No hotspots yet. Add info or teleport hotspots.'),
+                for (var i = 0; i < _hotspots.length; i++) _buildHotspotCard(i),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isSaving ? null : _save,
+                    icon: const Icon(Icons.save),
+                    label: const Text('Save Node'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -514,14 +882,22 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final isAdmin = isAdminEmail(FirebaseAuth.instance.currentUser?.email);
-
     if (!isAdmin) {
+      if (widget.embedded) {
+        return const Center(
+          child: Text('Access denied. Admin account required.'),
+        );
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('XR Node Editor')),
         body: const Center(
           child: Text('Access denied. Admin account required.'),
         ),
       );
+    }
+
+    if (widget.embedded) {
+      return _buildEditorBody(context);
     }
 
     return Scaffold(
@@ -541,80 +917,7 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextFormField(
-                          controller: _nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Node name',
-                          ),
-                          validator: (value) =>
-                              _validateRequired(value, 'Node name'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _panoUrlController,
-                          onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(
-                            labelText: 'Panorama URL (Firebase Storage URL)',
-                          ),
-                          validator: (value) =>
-                              _validateRequired(value, 'Panorama URL'),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildHotspotPreview(),
-                        Row(
-                          children: [
-                            Text(
-                              'Hotspots',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const Spacer(),
-                            OutlinedButton.icon(
-                              onPressed: () => _addHotspot('info'),
-                              icon: const Icon(Icons.info_outline),
-                              label: const Text('Add Info'),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: () => _addHotspot('teleport'),
-                              icon: const Icon(Icons.open_in_new),
-                              label: const Text('Add Teleport'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (_hotspots.isEmpty)
-                          const Text(
-                            'No hotspots yet. Add info or teleport hotspots.',
-                          ),
-                        for (var i = 0; i < _hotspots.length; i++)
-                          _buildHotspotCard(i),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _isSaving ? null : _save,
-                            icon: const Icon(Icons.save),
-                            label: const Text('Save Node'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+      body: _buildEditorBody(context),
     );
   }
 }
@@ -707,6 +1010,22 @@ class _PreviewHotspot {
     required this.type,
     required this.yaw,
     required this.pitch,
+  });
+}
+
+class _TeleportPreviewData {
+  final String nodeId;
+  final String title;
+  final String panoUrl;
+  final String? resolvedPreviewUrl;
+  final String? error;
+
+  const _TeleportPreviewData({
+    required this.nodeId,
+    required this.title,
+    required this.panoUrl,
+    required this.resolvedPreviewUrl,
+    required this.error,
   });
 }
 

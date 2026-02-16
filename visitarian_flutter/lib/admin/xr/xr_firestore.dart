@@ -17,9 +17,9 @@ class XrFirestore {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> nodesStream(String tourId) {
-    return _nodesCollection(
-      tourId,
-    ).orderBy('updatedAt', descending: true).snapshots();
+    // Do not order by updatedAt here because older nodes may not have this
+    // field yet and would be excluded from ordered queries.
+    return _nodesCollection(tourId).snapshots();
   }
 
   String createNodeId(String tourId) {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'admin_access.dart';
 import 'tour_nodes_screen.dart';
+import '../../services/auth_service.dart';
 
 class AdminXrHomeScreen extends StatefulWidget {
   const AdminXrHomeScreen({super.key});
@@ -16,6 +17,9 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   bool _isCreatingTour = false;
   bool _isCreatingPlace = false;
+  bool _isSigningOut = false;
+
+  final AuthService _authService = AuthService();
 
   Future<void> _createTourForPlace(String placeId) async {
     if (_isCreatingTour) return;
@@ -147,8 +151,7 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
                     'title': titleController.text.trim(),
                     'location': locationController.text.trim(),
                     'description': descriptionController.text.trim(),
-                    'temperature': 0,
-                    'temperatureC': 0,
+                    'weatherCondition': 'Unknown',
                     'imageUrl': imageUrlController.text.trim(),
                     'tourId': tourRef.id,
                     'createdAt': FieldValue.serverTimestamp(),
@@ -193,6 +196,49 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
     imageUrlController.dispose();
   }
 
+  Future<void> _logout() async {
+    if (_isSigningOut) return;
+
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Logout'),
+        content: const Text('Sign out from admin account?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true) return;
+
+    setState(() {
+      _isSigningOut = true;
+    });
+
+    try {
+      await _authService.signOut();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to logout: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSigningOut = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!isAdminEmail(FirebaseAuth.instance.currentUser?.email)) {
@@ -215,6 +261,17 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
               icon: const Icon(Icons.add_location_alt),
               label: const Text('Add Place'),
             ),
+          ),
+          IconButton(
+            onPressed: _isSigningOut ? null : _logout,
+            tooltip: 'Logout',
+            icon: _isSigningOut
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.logout),
           ),
         ],
       ),

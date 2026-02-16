@@ -13,14 +13,23 @@ class TourSelectionBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surface = Theme.of(context).colorScheme.surface;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? scheme.surfaceContainerHigh : scheme.surface;
     return Container(
       decoration: BoxDecoration(
         color: surface,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? scheme.outline.withValues(alpha: 0.45)
+                : scheme.outline.withValues(alpha: 0.15),
+          ),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.1),
+            blurRadius: isDark ? 10 : 4,
             offset: const Offset(0, -2),
           ),
         ],

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
-
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -21,51 +20,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     {
       'image': 'assets/images/onboarding/slide1.JPG',
       'quotes': [
-        '“Find yourself where the land breathes.”',
-        '“Feel the calm of nature.”',
-        '“Let your mind wander.”',
-        '“Breathe in the view.”',
-        '“Start your journey here.”',
+        '"Find yourself where the land breathes."',
+        '"Feel the calm of nature."',
+        '"Let your mind wander."',
+        '"Breathe in the view."',
+        '"Start your journey here."',
       ],
     },
     {
       'image': 'assets/images/onboarding/slide2.JPG',
       'quotes': [
-        '“Wander where the river sings.”',
-        '“Follow the flow of adventure.”',
-        '“Nature’s rhythm awaits.”',
-        '“Every stream tells a story.”',
-        '“Go where water leads.”',
+        '"Wander where the river sings."',
+        '"Follow the flow of adventure."',
+        "\"Nature's rhythm awaits.\"",
+        '"Every stream tells a story."',
+        '"Go where water leads."',
       ],
     },
     {
       'image': 'assets/images/onboarding/slide3.JPG',
       'quotes': [
-        '“Discover places worth remembering.”',
-        '“Capture moments that matter.”',
-        '“Explore beyond the usual.”',
-        '“Find hidden gems.”',
-        '“Memories start here.”',
+        '"Discover places worth remembering."',
+        '"Capture moments that matter."',
+        '"Explore beyond the usual."',
+        '"Find hidden gems."',
+        '"Memories start here."',
       ],
     },
     {
       'image': 'assets/images/onboarding/slide4.JPG',
       'quotes': [
-        '“Let the world be your guide.”',
-        '“Travel with purpose.”',
-        '“See more, feel more.”',
-        '“Explore with intention.”',
-        '“Let curiosity lead.”',
+        '"Let the world be your guide."',
+        '"Travel with purpose."',
+        '"See more, feel more."',
+        '"Explore with intention."',
+        '"Let curiosity lead."',
       ],
     },
     {
       'image': 'assets/images/onboarding/slide5.JPG',
       'quotes': [
-        '“Adventure is just a tap away.”',
-        '“Your next view is waiting.”',
-        '“Step into new places.”',
-        '“Explore anytime, anywhere.”',
-        '“Start the tour now.”',
+        '"Adventure is just a tap away."',
+        '"Your next view is waiting."',
+        '"Step into new places."',
+        '"Explore anytime, anywhere."',
+        '"Start the tour now."',
       ],
     },
   ];
@@ -186,18 +185,11 @@ class _OnboardingCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              imagePath,
-              fit: BoxFit.cover,
-            ),
-          ),
+          Positioned.fill(child: Image.asset(imagePath, fit: BoxFit.cover)),
 
           // Overlay for readability
           Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.35),
-            ),
+            child: Container(color: Colors.black.withValues(alpha: 0.35)),
           ),
 
           // Quote + arrow
@@ -263,10 +255,7 @@ class _DashIndicator extends StatelessWidget {
   final int count;
   final int currentIndex;
 
-  const _DashIndicator({
-    required this.count,
-    required this.currentIndex,
-  });
+  const _DashIndicator({required this.count, required this.currentIndex});
 
   @override
   Widget build(BuildContext context) {

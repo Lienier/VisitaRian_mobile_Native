@@ -14,20 +14,21 @@ class AuthService {
     required String password,
   }) async {
     final normalizedEmail = email.trim();
-    final methods = await _auth.fetchSignInMethodsForEmail(normalizedEmail);
-    if (methods.isNotEmpty) {
-      throw FirebaseAuthException(
-        code: 'email-already-in-use',
-        message: methods.contains('google.com')
-            ? 'This email is already registered with Google. Use Google sign in.'
-            : 'This email is already in use.',
+    UserCredential cred;
+    try {
+      cred = await _auth.createUserWithEmailAndPassword(
+        email: normalizedEmail,
+        password: password,
       );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        throw FirebaseAuthException(
+          code: 'email-already-in-use',
+          message: 'This email is already in use.',
+        );
+      }
+      rethrow;
     }
-
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: normalizedEmail,
-      password: password,
-    );
     final user = cred.user;
 
     if (user != null) {
@@ -51,15 +52,6 @@ class AuthService {
     required String password,
   }) async {
     final normalizedEmail = email.trim();
-    final methods = await _auth.fetchSignInMethodsForEmail(normalizedEmail);
-    if (methods.contains('google.com') && !methods.contains('password')) {
-      throw FirebaseAuthException(
-        code: 'provider-mismatch',
-        message:
-            'This email is registered with Google. Use Google sign in instead.',
-      );
-    }
-
     final cred = await _auth.signInWithEmailAndPassword(
       email: normalizedEmail,
       password: password,
@@ -86,15 +78,6 @@ class AuthService {
   Future<User?> signInWithGoogle() async {
     final googleUser = await GoogleSignIn().signIn();
     if (googleUser == null) return null; // user cancelled
-
-    final methods = await _auth.fetchSignInMethodsForEmail(googleUser.email);
-    if (methods.contains('password') && !methods.contains('google.com')) {
-      throw FirebaseAuthException(
-        code: 'provider-mismatch',
-        message:
-            'This email is registered with email and password. Use email sign in instead.',
-      );
-    }
 
     final googleAuth = await googleUser.authentication;
 

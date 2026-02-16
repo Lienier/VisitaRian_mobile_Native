@@ -5,6 +5,7 @@ class PlaceSearchBar extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   const PlaceSearchBar({
+    super.key,
     required this.hintText,
     required this.onChanged,
   });
@@ -17,7 +18,7 @@ class PlaceSearchBar extends StatelessWidget {
       height: 46,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
+        color: Colors.white.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -28,7 +29,10 @@ class PlaceSearchBar extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: hintText,
                 border: InputBorder.none,
-                hintStyle: TextStyle(color: Colors.black.withOpacity(0.45), fontSize: 13),
+                hintStyle: TextStyle(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  fontSize: 13,
+                ),
               ),
             ),
           ),
@@ -36,7 +40,7 @@ class PlaceSearchBar extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: pillGreen.withOpacity(0.12),
+              color: pillGreen.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.search, color: pillGreen, size: 20),

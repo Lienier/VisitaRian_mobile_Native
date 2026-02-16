@@ -18,9 +18,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     _timer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => AuthGate()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => AuthGate()));
     });
   }
 
@@ -36,69 +36,89 @@ class _SplashScreenState extends State<SplashScreen> {
     const lightText = Color(0xFFE6F1EC);
 
     final size = MediaQuery.of(context).size;
+    final isDesktop = size.width >= 1000;
+    final logoSize = (size.width * (isDesktop ? 0.55 : 1.5))
+        .clamp(340.0, 980.0)
+        .toDouble();
+    final titleSize = (size.width * (isDesktop ? 0.075 : 0.12))
+        .clamp(54.0, 112.0)
+        .toDouble();
+    final subtitleSize = (size.width * (isDesktop ? 0.016 : 0.033))
+        .clamp(13.0, 24.0)
+        .toDouble();
+    final rianShift = -(titleSize * 0.24);
+    final bottomOffset = (size.height * (isDesktop ? 0.09 : 0.05))
+        .clamp(24.0, 90.0)
+        .toDouble();
+    final contentMaxWidth = isDesktop ? 1200.0 : size.width;
 
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: Stack(
-          children: [
-            Align(
-              alignment: const Alignment(0, -1.5),
-              child: Image.asset(
-                'assets/images/logo.png',
-                width: size.width * 1.5,
-                height: size.width * 1.5,
-                fit: BoxFit.contain,
-              ),
-            ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: contentMaxWidth),
+            child: Stack(
+              children: [
+                Align(
+                  alignment: const Alignment(0, -1.45),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: logoSize,
+                    height: logoSize,
+                    fit: BoxFit.contain,
+                  ),
+                ),
 
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: size.height * 0.05,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Visita',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: lightText,
-                      fontSize: size.width * 0.12,
-                      fontWeight: FontWeight.w800,
-                      height: 0.85,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  Transform.translate(
-                    offset: Offset(0, -size.width * 0.03),
-                    child: Text(
-                      'Rian',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: lightText,
-                        fontSize: size.width * 0.12,
-                        fontWeight: FontWeight.w800,
-                        height: 0.85,
-                        letterSpacing: -0.5,
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: bottomOffset,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Visita',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: lightText,
+                          fontSize: titleSize,
+                          fontWeight: FontWeight.w800,
+                          height: 0.85,
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
+                      Transform.translate(
+                        offset: Offset(0, rianShift),
+                        child: Text(
+                          'Rian',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: lightText,
+                            fontSize: titleSize,
+                            fontWeight: FontWeight.w800,
+                            height: 0.85,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Explore through your eyes',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: lightText.withValues(alpha: 0.9),
+                          fontSize: subtitleSize,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Explore through your eyes',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: lightText.withOpacity(0.9),
-                      fontSize: size.width * 0.033,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

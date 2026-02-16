@@ -5,6 +5,7 @@ class PillBottomNav extends StatelessWidget {
   final ValueChanged<int> onChange;
 
   const PillBottomNav({
+    super.key,
     required this.activeIndex,
     required this.onChange,
   });
@@ -54,6 +55,7 @@ class NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const NavItem({
+    super.key,
     required this.label,
     required this.icon,
     required this.selected,
@@ -78,12 +80,19 @@ class NavItem extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: selected ? Colors.white : Colors.black87, size: 20),
+              Icon(
+                icon,
+                color: selected ? Colors.white : Colors.black87,
+                size: 20,
+              ),
               if (selected) ...[
                 const SizedBox(width: 8),
                 Text(
                   label,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ],

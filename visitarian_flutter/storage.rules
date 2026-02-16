@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Prefer custom claims (request.auth.token.admin == true) for production.
+    function isAdmin() {
+      return signedIn() &&
+          request.auth.token.email == 'reineilarayat70@gmail.com';
+    }
+
+    // User profile images
+    match /profiles/{userId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId;
+    }
+
+    // XR panorama/media content
+    match /tours/{tourId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Deny everything else by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

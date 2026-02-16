@@ -22,7 +22,7 @@ class PlaceDetailScreen extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Scaffold(
-              backgroundColor: const Color(0xFFE3D6D6),
+              backgroundColor: Theme.of(context).colorScheme.surface,
               body: const Center(child: CircularProgressIndicator()),
             );
           }
@@ -54,219 +54,251 @@ class PlaceDetailScreen extends StatelessWidget {
     Place place,
     Color pillGreen,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE3D6D6),
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Stack(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 16 / 10,
-                      child: _PlaceImage(path: place.imagePath),
-                    ),
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.15),
-                              Colors.black.withValues(alpha: 0.0),
-                              Colors.black.withValues(alpha: 0.55),
-                            ],
-                            stops: const [0.0, 0.55, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 12,
-                      top: 12,
-                      child: _RoundIconButton(
-                        icon: Icons.arrow_back,
-                        onTap: () => Navigator.pop(context),
-                      ),
-                    ),
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 14,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            place.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.location_on,
-                                size: 14,
-                                color: Colors.white70,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  place.location,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final isDesktop = width >= 1000;
+            final pagePadding = isDesktop ? 24.0 : 18.0;
+
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1360),
+                child: Padding(
+                  padding: EdgeInsets.all(pagePadding),
+                  child: isDesktop
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _StatCard(
-                              label: 'Distance',
-                              value: place.distanceKm.toStringAsFixed(0),
-                              suffix: 'Km',
+                            Expanded(
+                              flex: 6,
+                              child: _buildHeroCard(
+                                context,
+                                place,
+                                isDesktop: true,
+                              ),
                             ),
-                            _StatCard(
-                              label: 'Favorites',
-                              value: place.favoriteCount.toString(),
-                              suffix: '',
+                            const SizedBox(width: 18),
+                            Expanded(
+                              flex: 5,
+                              child: _buildInfoCard(
+                                context,
+                                place,
+                                pillGreen,
+                                isDesktop: true,
+                              ),
                             ),
-                            _StatCard(
-                              label: 'Temperature',
-                              value: place.temperatureC.toStringAsFixed(0),
-                              suffix: 'Â°C',
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            _buildHeroCard(context, place, isDesktop: false),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: _buildInfoCard(
+                                context,
+                                place,
+                                pillGreen,
+                                isDesktop: false,
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Description',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            child: Text(
-                              place.description,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                height: 1.35,
-                                color: Colors.black.withValues(alpha: 0.75),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: pillGreen,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            onPressed: () async {
-                              if (placeId == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Tour is unavailable for this place.',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
-                              try {
-                                final placeDoc = await FirebaseFirestore
-                                    .instance
-                                    .collection('places')
-                                    .doc(placeId)
-                                    .get();
-
-                                final tourId =
-                                    (placeDoc.data()?['tourId'] ?? '')
-                                        .toString()
-                                        .trim();
-
-                                if (tourId.isEmpty) {
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'No XR tour has been created for this place yet.',
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                if (!context.mounted) return;
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => XrTourPlayerScreen(
-                                      tourId: tourId,
-                                      placeTitle: place.title,
-                                    ),
-                                  ),
-                                );
-                              } catch (e) {
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Failed to open XR tour: $e'),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Text(
-                              'Explore',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+  Widget _buildHeroCard(
+    BuildContext context,
+    Place place, {
+    required bool isDesktop,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: isDesktop ? double.infinity : 260,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            Positioned.fill(child: _PlaceImage(path: place.imagePath)),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.15),
+                      Colors.black.withValues(alpha: 0.0),
+                      Colors.black.withValues(alpha: 0.55),
+                    ],
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              top: 12,
+              child: _RoundIconButton(
+                icon: Icons.arrow_back,
+                onTap: () => Navigator.pop(context),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 14,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    place.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
                     ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.white70,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          place.location,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    BuildContext context,
+    Place place,
+    Color pillGreen, {
+    required bool isDesktop,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? colorScheme.surfaceContainerHigh
+            : colorScheme.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outline.withValues(alpha: 0.45)
+              : colorScheme.outline.withValues(alpha: 0.14),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          isDesktop ? 22 : 18,
+          isDesktop ? 20 : 16,
+          isDesktop ? 22 : 18,
+          isDesktop ? 20 : 16,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _StatCard(
+                  label: 'Distance',
+                  value: place.distanceKm.toStringAsFixed(0),
+                  suffix: 'Km',
+                ),
+                _StatCard(
+                  label: 'Favorites',
+                  value: place.favoriteCount.toString(),
+                  suffix: '',
+                ),
+                _StatCard(
+                  label: 'Weather',
+                  value: place.weatherCondition,
+                  suffix: '',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Description',
+              style: TextStyle(
+                fontSize: isDesktop ? 14 : 12,
+                fontWeight: FontWeight.w800,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Text(
+                  place.description,
+                  style: TextStyle(
+                    fontSize: isDesktop ? 14 : 12.5,
+                    height: 1.4,
+                    color: colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: pillGreen,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                onPressed: () => _openTour(context, place),
+                child: const Text(
+                  'Explore',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -275,6 +307,50 @@ class PlaceDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openTour(BuildContext context, Place place) async {
+    if (placeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tour is unavailable for this place.')),
+      );
+      return;
+    }
+
+    try {
+      final placeDoc = await FirebaseFirestore.instance
+          .collection('places')
+          .doc(placeId)
+          .get();
+
+      final tourId = (placeDoc.data()?['tourId'] ?? '').toString().trim();
+
+      if (tourId.isEmpty) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No XR tour has been created for this place yet.'),
+          ),
+        );
+        return;
+      }
+
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => XrTourPlayerScreen(
+            tourId: tourId,
+            placeTitle: place.title,
+            showEntryFlow: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to open XR tour: $e')));
+    }
   }
 }
 
@@ -316,15 +392,23 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const pillGreen = Color(0xFF1B5A45);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final valueColor = isDark ? colorScheme.onSurface : const Color(0xFF1B5A45);
 
     return Container(
       width: 96,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark
+            ? colorScheme.surfaceContainerHighest
+            : colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: pillGreen.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outline.withValues(alpha: 0.5)
+              : const Color(0xFF1B5A45).withValues(alpha: 0.25),
+        ),
       ),
       child: Column(
         children: [
@@ -332,7 +416,7 @@ class _StatCard extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 10,
-              color: Colors.black.withValues(alpha: 0.6),
+              color: colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -343,20 +427,20 @@ class _StatCard extends StatelessWidget {
             children: [
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
-                  color: pillGreen,
+                  color: valueColor,
                 ),
               ),
               if (suffix.isNotEmpty) ...[
                 const SizedBox(width: 2),
                 Text(
                   suffix,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: pillGreen,
+                    color: valueColor,
                   ),
                 ),
               ],
@@ -374,7 +458,7 @@ class Place {
   final String imagePath;
   final double distanceKm;
   final int favoriteCount;
-  final double temperatureC;
+  final String weatherCondition;
   final String description;
 
   const Place({
@@ -383,7 +467,7 @@ class Place {
     required this.imagePath,
     required this.distanceKm,
     required this.favoriteCount,
-    required this.temperatureC,
+    required this.weatherCondition,
     required this.description,
   });
 
@@ -393,7 +477,7 @@ class Place {
     String? imagePath,
     double? distanceKm,
     int? favoriteCount,
-    double? temperatureC,
+    String? weatherCondition,
     String? description,
   }) {
     return Place(
@@ -402,7 +486,7 @@ class Place {
       imagePath: imagePath ?? this.imagePath,
       distanceKm: distanceKm ?? this.distanceKm,
       favoriteCount: favoriteCount ?? this.favoriteCount,
-      temperatureC: temperatureC ?? this.temperatureC,
+      weatherCondition: weatherCondition ?? this.weatherCondition,
       description: description ?? this.description,
     );
   }
@@ -419,21 +503,23 @@ class _PlaceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final placeholder = Theme.of(context).colorScheme.surfaceContainerHighest;
+
     if (_looksLikeNetwork(path) && path != 'test') {
       return Image.network(
         path,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          return const ColoredBox(
-            color: Colors.grey,
+          return ColoredBox(
+            color: placeholder,
             child: Center(child: Icon(Icons.broken_image)),
           );
         },
       );
     }
 
-    return const ColoredBox(
-      color: Colors.grey,
+    return ColoredBox(
+      color: placeholder,
       child: Center(child: Icon(Icons.broken_image)),
     );
   }

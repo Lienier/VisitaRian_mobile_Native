@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Prefer custom claims (request.auth.token.admin == true) for production.
+    function isAdmin() {
+      return signedIn() &&
+          request.auth.token.email == 'reineilarayat70@gmail.com';
+    }
+
+    // Users can manage their own profile; block privilege-style fields.
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if signedIn() &&
+          request.auth.uid == userId &&
+          !request.resource.data.keys().hasAny([
+            'role',
+            'roles',
+            'admin',
+            'isAdmin',
+            'claims',
+            'permissions'
+          ]);
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // Publicly visible place catalog; admin-managed content.
+    match /places/{placeId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Public reads; constrain count mutations to +1/-1 style updates.
+    match /favoriteStats/{placeId} {
+      allow read: if true;
+
+      allow create: if signedIn() &&
+          request.resource.data.keys().hasOnly(['count']) &&
+          request.resource.data.count is int &&
+          request.resource.data.count == 1;
+
+      allow update: if signedIn() &&
+          request.resource.data.keys().hasOnly(['count']) &&
+          resource.data.keys().hasOnly(['count']) &&
+          resource.data.count is int &&
+          request.resource.data.count is int &&
+          request.resource.data.count >= 0 &&
+          (
+            request.resource.data.count == resource.data.count + 1 ||
+            request.resource.data.count == resource.data.count - 1
+          );
+
+      // Keep delete available for app flow when count drops to zero.
+      allow delete: if signedIn();
+    }
+
+    // XR data is public read, admin write.
+    match /tours/{tourId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+
+      match /nodes/{nodeId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    // App-managed UI content.
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

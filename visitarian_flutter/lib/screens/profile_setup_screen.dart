@@ -298,7 +298,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   ? 'Picture selected'
                   : 'Tap camera to change picture',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black.withOpacity(0.6)),
+              style: TextStyle(color: Colors.black.withValues(alpha: 0.6)),
             ),
 
             const SizedBox(height: 24),
@@ -309,7 +309,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               decoration: InputDecoration(
                 labelText: 'Username',
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.85),
+                fillColor: Colors.white.withValues(alpha: 0.85),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -357,13 +357,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withValues(alpha: 0.85),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
                   _passwordHint ??
                       'Password change is only available for email/password accounts.',
-                  style: TextStyle(color: Colors.black.withOpacity(0.7)),
+                  style: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
                 ),
               )
             else if (!_showPasswordFields)
@@ -394,7 +394,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 decoration: InputDecoration(
                   labelText: 'Current Password',
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.85),
+                  fillColor: Colors.white.withValues(alpha: 0.85),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -408,7 +408,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 decoration: InputDecoration(
                   labelText: 'New Password',
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.85),
+                  fillColor: Colors.white.withValues(alpha: 0.85),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,

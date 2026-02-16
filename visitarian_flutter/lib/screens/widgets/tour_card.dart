@@ -9,6 +9,7 @@ class TourCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const TourCard({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.imageUrl,
@@ -31,10 +32,23 @@ class TourCard extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: (imageUrl.isNotEmpty && imageUrl != 'test')
-                    ? Image.network(imageUrl, fit: BoxFit.cover)
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.black12,
+                            child: const Center(
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          );
+                        },
+                      )
                     : Container(
                         color: Colors.black12,
-                        child: const Center(child: Icon(Icons.image_not_supported_outlined)),
+                        child: const Center(
+                          child: Icon(Icons.image_not_supported_outlined),
+                        ),
                       ),
               ),
 
@@ -45,8 +59,8 @@ class TourCard extends StatelessWidget {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withOpacity(0.0),
-                        Colors.black.withOpacity(0.55),
+                        Colors.black.withValues(alpha: 0.0),
+                        Colors.black.withValues(alpha: 0.55),
                       ],
                     ),
                   ),
@@ -74,7 +88,7 @@ class TourCard extends StatelessWidget {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -93,7 +107,7 @@ class TourCard extends StatelessWidget {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: pillGreen.withOpacity(0.55),
+                      color: pillGreen.withValues(alpha: 0.55),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(

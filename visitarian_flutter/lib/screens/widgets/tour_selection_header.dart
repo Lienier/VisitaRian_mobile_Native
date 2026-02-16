@@ -10,7 +10,9 @@ class TourSelectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).colorScheme.onSurface;
     final secondaryTextColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    final cardColor = Theme.of(context).colorScheme.surface;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? scheme.surfaceContainerHigh : scheme.surface;
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
@@ -55,11 +57,17 @@ class TourSelectionHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: cardColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(
+                    color: isDark
+                        ? scheme.outline.withValues(alpha: 0.45)
+                        : scheme.outline.withValues(alpha: 0.2),
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.35 : 0.1,
+                      ),
+                      blurRadius: isDark ? 10 : 4,
                       offset: const Offset(0, 2),
                     ),
                   ],

@@ -5,6 +5,7 @@ class PopularPlaceCard extends StatelessWidget {
   final String location;
   final String imageUrl;
   final bool isFavorite;
+  final double width;
   final VoidCallback onTap;
   final VoidCallback onToggleFavorite;
 
@@ -14,6 +15,7 @@ class PopularPlaceCard extends StatelessWidget {
     required this.location,
     required this.imageUrl,
     required this.isFavorite,
+    this.width = 160,
     required this.onTap,
     required this.onToggleFavorite,
   });
@@ -22,20 +24,27 @@ class PopularPlaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).colorScheme.onSurface;
     final secondaryTextColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    final cardColor = Theme.of(context).colorScheme.surface;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? scheme.surfaceContainerHigh : scheme.surface;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 160,
+        width: width,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: cardColor,
+          border: Border.all(
+            color: isDark
+                ? scheme.outline.withValues(alpha: 0.45)
+                : scheme.outline.withValues(alpha: 0.12),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 4,
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.1),
+              blurRadius: isDark ? 10 : 4,
               offset: const Offset(0, 2),
             ),
           ],
@@ -51,13 +60,17 @@ class PopularPlaceCard extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
-                  image: DecorationImage(
-                    image: _cardImageProvider(imageUrl),
-                    fit: BoxFit.cover,
-                  ),
                 ),
                 child: Stack(
                   children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: _cardImage(imageUrl),
+                      ),
+                    ),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -65,7 +78,7 @@ class PopularPlaceCard extends StatelessWidget {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -140,7 +153,9 @@ class DiscoverPlaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).colorScheme.onSurface;
     final secondaryTextColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    final cardColor = Theme.of(context).colorScheme.surface;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? scheme.surfaceContainerHigh : scheme.surface;
 
     return GestureDetector(
       onTap: onTap,
@@ -148,10 +163,15 @@ class DiscoverPlaceCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: cardColor,
+          border: Border.all(
+            color: isDark
+                ? scheme.outline.withValues(alpha: 0.45)
+                : scheme.outline.withValues(alpha: 0.12),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 4,
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.1),
+              blurRadius: isDark ? 10 : 4,
               offset: const Offset(0, 2),
             ),
           ],
@@ -167,13 +187,17 @@ class DiscoverPlaceCard extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
-                  image: DecorationImage(
-                    image: _cardImageProvider(imageUrl),
-                    fit: BoxFit.cover,
-                  ),
                 ),
                 child: Stack(
                   children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: _cardImage(imageUrl),
+                      ),
+                    ),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -181,7 +205,7 @@ class DiscoverPlaceCard extends StatelessWidget {
                         width: 28,
                         height: 28,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -234,12 +258,19 @@ class DiscoverPlaceCard extends StatelessWidget {
   }
 }
 
-ImageProvider _cardImageProvider(String imageUrl) {
+Widget _cardImage(String imageUrl) {
   if (imageUrl.isNotEmpty) {
-    return ResizeImage(NetworkImage(imageUrl), width: 720);
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) {
+        return Image.asset(
+          'assets/images/onboarding/slide1.JPG',
+          fit: BoxFit.cover,
+        );
+      },
+    );
   }
-  return const ResizeImage(
-    AssetImage('assets/images/onboarding/slide1.JPG'),
-    width: 720,
-  );
+  return Image.asset('assets/images/onboarding/slide1.JPG', fit: BoxFit.cover);
 }

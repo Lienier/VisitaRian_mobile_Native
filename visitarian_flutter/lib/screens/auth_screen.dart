@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
-import '../../services/auth_service.dart';
+import '../services/auth_service.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -254,7 +254,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     elevation: 6,
-                    shadowColor: Colors.black.withOpacity(1.0),
+                    shadowColor: Colors.black.withValues(alpha: 1.0),
                   ),
                   onPressed: _loading ? null : _doEmailAuth,
                   child: _loading
@@ -293,16 +293,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     side: BorderSide(color: Colors.grey.shade300),
                     elevation: 4,
-                    shadowColor: Colors.black.withOpacity(1.0),
+                    shadowColor: Colors.black.withValues(alpha: 1.0),
                   ),
                   onPressed: _loading ? null : _doGoogle,
-                  icon: Image.asset(
-                    'assets/images/google_logo.png',
-                    height: 20,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.g_mobiledata, size: 20);
-                    },
-                  ),
+                  icon: const Icon(Icons.g_mobiledata, size: 24),
                   label: const Text(
                     "Sign in with Google",
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
@@ -416,7 +410,7 @@ class _AuthScreenState extends State<AuthScreen> {
             border: Border.all(color: Colors.grey.shade300),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(.5),
+                color: Colors.black.withValues(alpha: .5),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),

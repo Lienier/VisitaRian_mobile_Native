@@ -60,23 +60,9 @@ class AuthGate extends StatelessWidget {
                 final daysSinceCreated = DateTime.now()
                     .difference(createdAt.toDate())
                     .inDays;
-                if (daysSinceCreated > 30) {
-                  hasSeenOnboarding = true;
-                  FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(user.uid)
-                      .set({
-                        'hasSeenOnboarding': true,
-                      }, SetOptions(merge: true));
-                } else {
-                  hasSeenOnboarding = false;
-                }
+                hasSeenOnboarding = daysSinceCreated > 30;
               } else {
                 hasSeenOnboarding = true;
-                FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .set({'hasSeenOnboarding': true}, SetOptions(merge: true));
               }
             }
 
@@ -99,12 +85,6 @@ class AuthGate extends StatelessWidget {
             }
 
             final isAdmin = isAdminEmail(user.email);
-            if (isAdmin && (userData?['role'] ?? '').toString() != 'admin') {
-              FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-                'role': 'admin',
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-            }
 
             if (isAdmin) {
               return const AdminXrHomeScreen();
