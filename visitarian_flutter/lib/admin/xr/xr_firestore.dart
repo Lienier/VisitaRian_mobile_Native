@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import 'xr_models.dart';
+import 'package:visitarian_flutter/admin/xr/xr_models.dart';
 
 class XrFirestore {
   final FirebaseFirestore _db;
@@ -26,6 +25,33 @@ class XrFirestore {
     return _nodesCollection(tourId).doc().id;
   }
 
+  Future<void> createNodeDraft({
+    required String tourId,
+    required String nodeId,
+  }) async {
+    final existing = await _nodesCollection(tourId).get();
+    var maxOrder = -1;
+    for (final doc in existing.docs) {
+      final raw = doc.data()['order'];
+      final value = raw is num ? raw.toInt() : null;
+      if (value != null && value > maxOrder) {
+        maxOrder = value;
+      }
+    }
+
+    await _nodesCollection(tourId).doc(nodeId).set({
+      'name': 'Untitled Node',
+      'panoUrl': '',
+      'hotspots': const <Map<String, dynamic>>[],
+      'order': maxOrder + 1,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await _tourCollection().doc(tourId).set({
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Future<DocumentSnapshot<Map<String, dynamic>>> getNode({
     required String tourId,
     required String nodeId,
@@ -44,6 +70,7 @@ class XrFirestore {
       'name': name.trim(),
       'panoUrl': panoUrl.trim(),
       'hotspots': hotspots.map((e) => e.toMap()).toList(),
+      'order': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
@@ -60,6 +87,26 @@ class XrFirestore {
       'startNodeId': startNodeId,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  Future<void> reorderNodes({
+    required String tourId,
+    required List<String> orderedNodeIds,
+  }) async {
+    final batch = _db.batch();
+    for (var i = 0; i < orderedNodeIds.length; i++) {
+      final nodeId = orderedNodeIds[i];
+      batch.set(_nodesCollection(tourId).doc(nodeId), {
+        'order': i,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    batch.set(_tourCollection().doc(tourId), {
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
   }
 
   Future<Map<String, dynamic>> buildTourJson(String tourId) async {

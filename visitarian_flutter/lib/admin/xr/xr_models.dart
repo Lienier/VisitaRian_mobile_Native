@@ -6,6 +6,9 @@ class XrHotspot {
   final String? text;
   final String? toNodeId;
   final String? label;
+  final String? icon;
+  final String? colorHex;
+  final double? size;
 
   const XrHotspot({
     required this.type,
@@ -15,6 +18,9 @@ class XrHotspot {
     this.text,
     this.toNodeId,
     this.label,
+    this.icon,
+    this.colorHex,
+    this.size,
   });
 
   XrHotspot copyWith({
@@ -25,6 +31,9 @@ class XrHotspot {
     String? text,
     String? toNodeId,
     String? label,
+    String? icon,
+    String? colorHex,
+    double? size,
   }) {
     return XrHotspot(
       type: type ?? this.type,
@@ -34,6 +43,9 @@ class XrHotspot {
       text: text ?? this.text,
       toNodeId: toNodeId ?? this.toNodeId,
       label: label ?? this.label,
+      icon: icon ?? this.icon,
+      colorHex: colorHex ?? this.colorHex,
+      size: size ?? this.size,
     );
   }
 
@@ -52,6 +64,15 @@ class XrHotspot {
     if (label != null && label!.trim().isNotEmpty) {
       map['label'] = label!.trim();
     }
+    if (icon != null && icon!.trim().isNotEmpty) {
+      map['icon'] = icon!.trim();
+    }
+    if (colorHex != null && colorHex!.trim().isNotEmpty) {
+      map['colorHex'] = colorHex!.trim();
+    }
+    if (size != null) {
+      map['size'] = size;
+    }
 
     return map;
   }
@@ -65,6 +86,9 @@ class XrHotspot {
       text: map['text']?.toString(),
       toNodeId: map['toNodeId']?.toString(),
       label: map['label']?.toString(),
+      icon: map['icon']?.toString(),
+      colorHex: map['colorHex']?.toString(),
+      size: (map['size'] as num?)?.toDouble(),
     );
   }
 }

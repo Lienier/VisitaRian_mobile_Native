@@ -2,13 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
-import 'profile_setup_screen.dart';
-import 'place_detail_screen.dart';
-import 'widgets/tour_place_cards.dart';
-import 'widgets/tour_profile_content.dart';
-import 'widgets/tour_selection_bottom_nav.dart';
-import 'widgets/tour_selection_header.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
+import 'package:visitarian_flutter/screens/place_detail_screen.dart';
+import 'package:visitarian_flutter/screens/profile_setup_screen.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_place_cards.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_profile_content.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_selection_bottom_nav.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_selection_header.dart';
 
 class TourSelectionScreen extends StatefulWidget {
   const TourSelectionScreen({super.key});
@@ -327,13 +327,29 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final isLandscapePhone = width >= 640 && height < 560;
         final isDesktop = width >= 1000;
-        final horizontalPadding = isDesktop ? 24.0 : 16.0;
-        final popularHeight = isDesktop ? 240.0 : 200.0;
-        final popularCardWidth = isDesktop ? 240.0 : 160.0;
+        final horizontalPadding = isDesktop
+            ? 24.0
+            : isLandscapePhone
+            ? 12.0
+            : 16.0;
+        final popularHeight = isDesktop
+            ? 240.0
+            : isLandscapePhone
+            ? 170.0
+            : 200.0;
+        final popularCardWidth = isDesktop
+            ? 240.0
+            : isLandscapePhone
+            ? 180.0
+            : 160.0;
         final crossAxisCount = width >= 1200
             ? 4
             : width >= 900
+            ? 3
+            : isLandscapePhone
             ? 3
             : 2;
 
@@ -352,7 +368,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                         child: Text(
                           'Popular Destination',
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: isLandscapePhone ? 18 : 20,
                             fontWeight: FontWeight.bold,
                             color: textColor,
                           ),
@@ -397,7 +413,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                     child: Text(
                       'Discover Places',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: isLandscapePhone ? 18 : 20,
                         fontWeight: FontWeight.bold,
                         color: textColor,
                       ),
@@ -412,7 +428,11 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      childAspectRatio: isDesktop ? 0.95 : 0.8,
+                      childAspectRatio: isDesktop
+                          ? 0.95
+                          : isLandscapePhone
+                          ? 0.98
+                          : 0.8,
                     ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final doc = filteredDocs[index];
@@ -515,21 +535,35 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final isLandscapePhone = width >= 640 && height < 560;
         final isDesktop = width >= 1000;
         final crossAxisCount = width >= 1200
             ? 4
             : width >= 900
             ? 3
+            : isLandscapePhone
+            ? 3
             : 2;
 
         return Padding(
-          padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
+          padding: EdgeInsets.all(
+            isDesktop
+                ? 24.0
+                : isLandscapePhone
+                ? 12.0
+                : 16.0,
+          ),
           child: GridView.builder(
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: isDesktop ? 0.95 : 0.8,
+              childAspectRatio: isDesktop
+                  ? 0.95
+                  : isLandscapePhone
+                  ? 0.98
+                  : 0.8,
             ),
             itemCount: favoritePlaces.length,
             itemBuilder: (context, index) {

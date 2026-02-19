@@ -5,10 +5,11 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Prefer custom claims (request.auth.token.admin == true) for production.
     function isAdmin() {
+      // Admin membership comes from Firestore document existence:
+      // /admins/{uid}
       return signedIn() &&
-          request.auth.token.email == 'reineilarayat70@gmail.com';
+          exists(/databases/(default)/documents/admins/$(request.auth.uid));
     }
 
     // User profile images

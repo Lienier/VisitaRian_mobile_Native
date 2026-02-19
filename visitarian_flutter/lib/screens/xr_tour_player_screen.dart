@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -34,7 +35,9 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
   String? _error;
   String? _startNodeId;
   String? _currentNodeId;
+  String? _resolvedPreviewPanoUrl;
   String? _resolvedPanoUrl;
+  bool _highResReady = false;
   Map<String, dynamic>? _currentNodeData;
   bool _showIntroOverlay = true;
   bool _showSafetyWarning = false;
@@ -48,6 +51,7 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
   String? _gazeTargetKey;
   double _gazeProgress = 0;
   DateTime _gazeCooldownUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  final Set<String> _prefetchedNodeIds = <String>{};
 
   @override
   void initState() {
@@ -87,7 +91,10 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
       return;
     }
     if (_isNormalFullscreenActive) {
-      await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      await SystemChrome.setPreferredOrientations(const [
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       return;
     }
@@ -205,20 +212,67 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
         _currentNodeData = nodeDoc.data();
         _loading = false;
         _error = null;
+        _resolvedPreviewPanoUrl = null;
         _resolvedPanoUrl = null;
-        _resolvingPanoUrl = false;
+        _highResReady = false;
+        _resolvingPanoUrl = true;
         _activeInfoTitle = null;
         _activeInfoText = null;
         _resetGazeTracking();
       });
 
+      final hotspots = _parseHotspots();
+      unawaited(_prefetchTeleportTargetImages(hotspots));
+
+      final rawPreviewUrl = (_currentNodeData?['previewUrl'] ?? '')
+          .toString()
+          .trim();
       final rawPanoUrl = (_currentNodeData?['panoUrl'] ?? '').toString().trim();
       final token = ++_panoResolveToken;
-      await _resolvePanoramaUrl(
-        rawPanoUrl,
-        expectedNodeId: nodeDoc.id,
-        token: token,
-      );
+
+      final resolvedPreview = await _resolveRemoteUrl(rawPreviewUrl);
+      if (mounted &&
+          token == _panoResolveToken &&
+          _currentNodeId == nodeDoc.id &&
+          resolvedPreview != null) {
+        setState(() {
+          _resolvedPreviewPanoUrl = resolvedPreview;
+        });
+        unawaited(
+          precacheImage(CachedNetworkImageProvider(resolvedPreview), context),
+        );
+      }
+
+      final resolvedPano = await _resolveRemoteUrl(rawPanoUrl);
+      if (!mounted ||
+          token != _panoResolveToken ||
+          _currentNodeId != nodeDoc.id) {
+        return;
+      }
+      if (resolvedPano == null) {
+        setState(() {
+          _resolvingPanoUrl = false;
+          _highResReady = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _resolvedPanoUrl = resolvedPano;
+        _highResReady = true;
+        _resolvingPanoUrl = false;
+      });
+
+      unawaited(() async {
+        try {
+          await precacheImage(
+            CachedNetworkImageProvider(resolvedPano),
+            context,
+          );
+        } catch (_) {
+          // Ignore pre-cache failure; on-screen image load still proceeds.
+        }
+      }());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -228,90 +282,85 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
     }
   }
 
-  Future<void> _resolvePanoramaUrl(
-    String rawUrl, {
-    required String expectedNodeId,
-    required int token,
-  }) async {
-    if (!mounted || token != _panoResolveToken) return;
-    setState(() {
-      _resolvingPanoUrl = true;
-      _resolvedPanoUrl = null;
-    });
-
+  Future<String?> _resolveRemoteUrl(String rawUrl) async {
     final trimmed = rawUrl.trim();
     if (trimmed.isEmpty) {
-      if (!mounted ||
-          token != _panoResolveToken ||
-          _currentNodeId != expectedNodeId) {
-        return;
-      }
-      setState(() {
-        _resolvingPanoUrl = false;
-      });
-      return;
+      return null;
     }
 
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      if (!mounted ||
-          token != _panoResolveToken ||
-          _currentNodeId != expectedNodeId) {
-        return;
-      }
-      setState(() {
-        _resolvedPanoUrl = trimmed;
-        _resolvingPanoUrl = false;
-      });
-      return;
+      return trimmed;
     }
 
     if (trimmed.startsWith('gs://')) {
       try {
-        final downloadUrl = await FirebaseStorage.instance
+        return await FirebaseStorage.instance
             .refFromURL(trimmed)
             .getDownloadURL();
-        if (!mounted ||
-            token != _panoResolveToken ||
-            _currentNodeId != expectedNodeId) {
-          return;
-        }
-        setState(() {
-          _resolvedPanoUrl = downloadUrl;
-          _resolvingPanoUrl = false;
-        });
-        return;
       } catch (_) {
         // Fall through to path-based resolution.
       }
     }
 
     try {
-      final downloadUrl = await FirebaseStorage.instance
+      return await FirebaseStorage.instance
           .ref()
           .child(trimmed)
           .getDownloadURL();
-      if (!mounted ||
-          token != _panoResolveToken ||
-          _currentNodeId != expectedNodeId) {
-        return;
-      }
-      setState(() {
-        _resolvedPanoUrl = downloadUrl;
-        _resolvingPanoUrl = false;
-      });
-      return;
     } catch (_) {
-      // Keep invalid URL state below.
+      return null;
     }
+  }
 
-    if (!mounted ||
-        token != _panoResolveToken ||
-        _currentNodeId != expectedNodeId) {
-      return;
+  Future<void> _prefetchTeleportTargetImages(
+    List<_RuntimeHotspot> hotspots,
+  ) async {
+    final currentNodeId = _currentNodeId;
+    if (currentNodeId == null) return;
+
+    final targetIds = hotspots
+        .where((hotspot) => hotspot.type == 'teleport')
+        .map((hotspot) => (hotspot.toNodeId ?? '').trim())
+        .where((id) => id.isNotEmpty && id != currentNodeId)
+        .toSet();
+
+    for (final targetId in targetIds) {
+      if (_prefetchedNodeIds.contains(targetId)) continue;
+      _prefetchedNodeIds.add(targetId);
+      unawaited(_prefetchNodeImages(targetId));
     }
-    setState(() {
-      _resolvingPanoUrl = false;
-    });
+  }
+
+  Future<void> _prefetchNodeImages(String nodeId) async {
+    try {
+      final snapshot = await _db
+          .collection('tours')
+          .doc(widget.tourId)
+          .collection('nodes')
+          .doc(nodeId)
+          .get();
+      if (!snapshot.exists || !mounted) return;
+
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      final rawPreview = (data['previewUrl'] ?? '').toString().trim();
+      final rawPano = (data['panoUrl'] ?? '').toString().trim();
+
+      final urls = <String?>[
+        await _resolveRemoteUrl(rawPreview),
+        await _resolveRemoteUrl(rawPano),
+      ];
+
+      for (final url in urls) {
+        if (url == null || !mounted) continue;
+        try {
+          await precacheImage(CachedNetworkImageProvider(url), context);
+        } catch (_) {
+          // Ignore prefetch failures; normal load still runs later.
+        }
+      }
+    } catch (_) {
+      // Ignore prefetch failures.
+    }
   }
 
   List<_RuntimeHotspot> _parseHotspots() {
@@ -479,90 +528,110 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
             _onSwipeUpToEnter();
           }
         },
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          color: Colors.black.withValues(alpha: 0.35),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Explore the beauty of',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isShort = constraints.maxHeight < 430;
+            final topTitleSize = isShort ? 13.0 : 16.0;
+            final destinationTitleSize = isShort ? 34.0 : 44.0;
+            final chooseModeSize = isShort ? 30.0 : 38.0;
+            final verticalButtonPadding = isShort ? 10.0 : 14.0;
+
+            return Container(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                isShort ? 12 : 24,
+                16,
+                isShort ? 12 : 24,
               ),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                  height: 1.05,
-                ),
-              ),
-              const Spacer(),
-              const Text(
-                'Choose View Mode',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 38,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0,
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _supportsVrCardboard ? _enterVrMode : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C8D5B),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+              color: Colors.black.withValues(alpha: 0.35),
+              child: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Explore the beauty of',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: topTitleSize,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: destinationTitleSize,
+                          fontWeight: FontWeight.w800,
+                          height: 1.05,
+                        ),
+                      ),
+                      SizedBox(height: isShort ? 12 : 18),
+                      Text(
+                        'Choose View Mode',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: chooseModeSize,
+                          fontWeight: FontWeight.w800,
+                          height: 1.0,
+                        ),
+                      ),
+                      SizedBox(height: isShort ? 12 : 55),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _supportsVrCardboard ? _enterVrMode : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2C8D5B),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              vertical: verticalButtonPadding,
+                            ),
+                          ),
+                          icon: const Icon(Icons.vrpano),
+                          label: const Text(
+                            'VR Mode',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      if (!_supportsVrCardboard)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'VR mode is only available on Android/iOS devices.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _enterScreenMode,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70),
+                            padding: EdgeInsets.symmetric(
+                              vertical: verticalButtonPadding,
+                            ),
+                          ),
+                          icon: const Icon(Icons.smartphone),
+                          label: const Text(
+                            'Screen / Normal Mode',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  icon: const Icon(Icons.vrpano),
-                  label: const Text(
-                    'VR Mode',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
                 ),
               ),
-              if (!_supportsVrCardboard)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    'VR mode is only available on Android/iOS devices.',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _enterScreenMode,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white70),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.smartphone),
-                  label: const Text(
-                    'Screen / Normal Mode',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Center(
-                child: Text(
-                  'VR mode shows safety warning first',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -574,87 +643,101 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
     }
 
     return Positioned.fill(
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.45),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.all(20),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.65),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF0FC1FF), width: 1.2),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'WARNING!',
-                style: TextStyle(
-                  color: Color(0xFF1CC848),
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isShort = constraints.maxHeight < 430;
+          final horizontalPadding = isShort ? 12.0 : 20.0;
+          final titleSize = isShort ? 26.0 : 34.0;
+          final bodyFontSize = isShort ? 12.0 : 13.0;
+
+          return Container(
+            color: Colors.black.withValues(alpha: 0.45),
+            alignment: Alignment.center,
+            padding: EdgeInsets.all(horizontalPadding),
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: 420,
+                maxHeight: constraints.maxHeight - (horizontalPadding * 2),
               ),
-              const SizedBox(height: 10),
-              const Text(
-                'This mobile virtual reality nature experience limits your awareness of your real-world surroundings. '
-                'Use only in a safe, open area free of obstacles, edges, water, or traffic. Remain seated or stationary '
-                'while wearing the headset, and remove it before walking or moving. Take regular breaks to prevent '
-                'dizziness or discomfort. Children should be supervised at all times. Remember, while the environment may '
-                'be virtual, real-world hazards still exist.',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  height: 1.4,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.justify,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF0FC1FF), width: 1.2),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _showSafetyWarning = false;
-                        _showIntroOverlay = false;
-                        _viewMode = _ViewMode.vrCardboard;
-                      });
-                      _applySystemUiForCurrentState();
-                    },
-                    child: const Text(
-                      'OK',
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'WARNING!',
                       style: TextStyle(
-                        color: Color(0xFF1CC848),
+                        color: const Color(0xFF1CC848),
+                        fontSize: titleSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _showSafetyWarning = false;
-                        _viewMode = _ViewMode.embedded;
-                      });
-                      _applySystemUiForCurrentState();
-                    },
-                    child: const Text(
-                      'BACK',
+                    const SizedBox(height: 10),
+                    Text(
+                      'This mobile virtual reality nature experience limits your awareness of your real-world surroundings. '
+                      'Use only in a safe, open area free of obstacles, edges, water, or traffic. Remain seated or stationary '
+                      'while wearing the headset, and remove it before walking or moving. Take regular breaks to prevent '
+                      'dizziness or discomfort. Children should be supervised at all times. Remember, while the environment may '
+                      'be virtual, real-world hazards still exist.',
                       style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w800,
+                        fontSize: bodyFontSize,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
                       ),
+                      textAlign: TextAlign.justify,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _showSafetyWarning = false;
+                              _showIntroOverlay = false;
+                              _viewMode = _ViewMode.vrCardboard;
+                            });
+                            _applySystemUiForCurrentState();
+                          },
+                          child: const Text(
+                            'OK',
+                            style: TextStyle(
+                              color: Color(0xFF1CC848),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _showSafetyWarning = false;
+                              _viewMode = _ViewMode.embedded;
+                            });
+                            _applySystemUiForCurrentState();
+                          },
+                          child: const Text(
+                            'BACK',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -737,9 +820,12 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
         .map((entry) {
           final index = entry.key;
           final hotspot = entry.value;
-          final markerColor = hotspot.type == 'teleport'
-              ? Colors.orange
-              : Colors.lightBlueAccent;
+          final isTeleport = hotspot.type == 'teleport';
+          final markerColor = _parseColorHexOrDefault(
+            hotspot.colorHex,
+            hotspot.type,
+          );
+          final markerSize = hotspot.size.clamp(16.0, 44.0);
           final rawLatitude = hotspot.pitch;
           final rawLongitude = hotspot.yaw;
 
@@ -756,33 +842,69 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
           return Hotspot(
             latitude: latitude,
             longitude: longitude,
-            width: 32,
-            height: 32,
+            width: markerSize,
+            height: markerSize,
             widget: GestureDetector(
               onTap: () => _onHotspotTap(hotspot),
-              child: Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: markerColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black38,
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
+              child: SizedBox(
+                width: markerSize,
+                height: markerSize,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: markerSize,
+                      height: markerSize,
+                      decoration: BoxDecoration(
+                        color: markerColor.withValues(alpha: 0.25),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: markerColor.withValues(alpha: 0.45),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: markerSize * 0.62,
+                      height: markerSize * 0.62,
+                      decoration: BoxDecoration(
+                        color: markerColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.3),
+                      ),
+                      child: Icon(
+                        _iconForStyle(hotspot.iconStyle, isTeleport),
+                        size: markerSize * 0.35,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        width: markerSize * 0.42,
+                        height: markerSize * 0.42,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black,
+                            height: 1,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
-                ),
-                child: Text(
-                  '${index + 1}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
                 ),
               ),
             ),
@@ -800,17 +922,16 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
     SensorControl? sensorControlOverride,
     Function(double longitude, double latitude, double tilt)? onViewChanged,
   }) {
-    if (_resolvingPanoUrl) {
-      return const ColoredBox(
-        color: Colors.black54,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     final hasUrl =
         panoUrl.startsWith('http://') || panoUrl.startsWith('https://');
 
     if (!hasUrl) {
+      if (_resolvingPanoUrl) {
+        return const ColoredBox(
+          color: Colors.black54,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      }
       return ColoredBox(
         color: Colors.black54,
         child: Center(
@@ -832,6 +953,11 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
             ? SensorControl.orientation
             : SensorControl.none);
 
+    final cacheWidth = (MediaQuery.sizeOf(context).width * 2).round().clamp(
+      1024,
+      4096,
+    );
+
     return PanoramaViewer(
       interactive: interactive,
       sensorControl: sensorControl,
@@ -842,7 +968,8 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
       child: Image.network(
         panoUrl,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
+        cacheWidth: cacheWidth,
+        errorBuilder: (context, networkError, stackTrace) {
           return const ColoredBox(
             color: Colors.black54,
             child: Center(
@@ -865,9 +992,7 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
     SensorControl? sensorControlOverride,
     Function(double longitude, double latitude, double tilt)? onViewChanged,
   }) {
-    final transitionKey = ValueKey<String>(
-      '${_currentNodeId ?? ''}|${_resolvedPanoUrl ?? panoUrl}',
-    );
+    final transitionKey = ValueKey<String>('${_currentNodeId ?? ''}|$panoUrl');
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 350),
@@ -990,7 +1115,10 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
     final isFullscreen = isVrCardboard || isNormalFullscreen;
     final nodeName = (_currentNodeData?['name'] ?? '').toString();
     final rawPanoUrl = (_currentNodeData?['panoUrl'] ?? '').toString().trim();
-    final panoUrl = _resolvedPanoUrl ?? rawPanoUrl;
+    final activePanoUrl =
+        (_highResReady ? _resolvedPanoUrl : _resolvedPreviewPanoUrl) ??
+        _resolvedPanoUrl ??
+        rawPanoUrl;
     final hotspots = _parseHotspots();
 
     return Column(
@@ -1037,8 +1165,21 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: _buildVrCardboardPanorama(panoUrl, hotspots),
+                        child: _buildVrCardboardPanorama(
+                          activePanoUrl,
+                          hotspots,
+                        ),
                       ),
+                      if (_resolvingPanoUrl)
+                        const Positioned(
+                          top: 10,
+                          left: 10,
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
                       _buildVrReticle(),
                       Positioned(
                         top: 10,
@@ -1076,7 +1217,7 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                     children: [
                       Positioned.fill(
                         child: _buildPanoramaWithTransition(
-                          panoUrl,
+                          activePanoUrl,
                           hotspots,
                           showHotspots: true,
                           interactive: true,
@@ -1139,6 +1280,16 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                           ],
                         ),
                       ),
+                      if (_resolvingPanoUrl)
+                        const Positioned(
+                          top: 10,
+                          left: 10,
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
                       if (_showIntroOverlay)
                         _buildEntryOverlay(widget.placeTitle ?? 'Destination'),
                       _buildSafetyWarningOverlay(),
@@ -1161,12 +1312,24 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                         children: [
                           Positioned.fill(
                             child: _buildPanoramaWithTransition(
-                              panoUrl,
+                              activePanoUrl,
                               hotspots,
                               showHotspots: true,
                               interactive: true,
                             ),
                           ),
+                          if (_resolvingPanoUrl)
+                            const Positioned(
+                              top: 10,
+                              left: 10,
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
                           Positioned(
                             top: 10,
                             right: 10,
@@ -1315,6 +1478,9 @@ class _RuntimeHotspot {
   final String? text;
   final String? toNodeId;
   final String? label;
+  final String iconStyle;
+  final String? colorHex;
+  final double size;
 
   const _RuntimeHotspot({
     required this.type,
@@ -1324,6 +1490,9 @@ class _RuntimeHotspot {
     this.text,
     this.toNodeId,
     this.label,
+    this.iconStyle = 'auto',
+    this.colorHex,
+    this.size = 28,
   });
 
   factory _RuntimeHotspot.fromMap(Map<String, dynamic> map) {
@@ -1343,6 +1512,45 @@ class _RuntimeHotspot {
       text: map['text']?.toString(),
       toNodeId: map['toNodeId']?.toString(),
       label: map['label']?.toString(),
+      iconStyle: (map['icon'] ?? 'auto').toString(),
+      colorHex: map['colorHex']?.toString(),
+      size: readFiniteDouble(map['size']).clamp(16.0, 44.0),
     );
+  }
+}
+
+Color _defaultHotspotColor(String type) {
+  return type == 'teleport' ? Colors.orangeAccent : Colors.lightBlueAccent;
+}
+
+Color _parseColorHexOrDefault(String? hex, String type) {
+  final fallback = _defaultHotspotColor(type);
+  if (hex == null) return fallback;
+  var input = hex.trim();
+  if (input.isEmpty) return fallback;
+  if (input.startsWith('#')) input = input.substring(1);
+  if (input.length == 6) input = 'FF$input';
+  if (input.length != 8) return fallback;
+  final value = int.tryParse(input, radix: 16);
+  if (value == null) return fallback;
+  return Color(value);
+}
+
+IconData _iconForStyle(String style, bool isTeleport) {
+  switch (style) {
+    case 'pin':
+      return Icons.place;
+    case 'star':
+      return Icons.star;
+    case 'flag':
+      return Icons.flag;
+    case 'camera':
+      return Icons.photo_camera;
+    case 'arrow':
+      return Icons.arrow_forward;
+    case 'info':
+      return Icons.info_outline;
+    default:
+      return isTeleport ? Icons.arrow_forward : Icons.info_outline;
   }
 }

@@ -7,11 +7,11 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:visitarian_flutter/main.dart';
+import 'package:visitarian_flutter/app/app.dart';
 
 void main() {
   testWidgets('Splash screen is shown on startup', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const VisitaRianApp());
 
     expect(find.text('Visita'), findsOneWidget);
     expect(find.text('Rian'), findsOneWidget);

@@ -5,10 +5,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Prefer custom claims (request.auth.token.admin == true) for production.
     function isAdmin() {
+      // Admin membership comes from Firestore document existence:
+      // /admins/{uid}
       return signedIn() &&
-          request.auth.token.email == 'reineilarayat70@gmail.com';
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     // Users can manage their own profile; block privilege-style fields.

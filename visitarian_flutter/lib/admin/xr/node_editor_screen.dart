@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import 'admin_access.dart';
-import 'xr_firestore.dart';
-import 'xr_models.dart';
+import 'package:visitarian_flutter/admin/xr/admin_access.dart';
+import 'package:visitarian_flutter/admin/xr/xr_firestore.dart';
+import 'package:visitarian_flutter/admin/xr/xr_models.dart';
 
 class NodeEditorScreen extends StatefulWidget {
   final String tourId;
@@ -33,10 +33,14 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _panoUrlController = TextEditingController();
+  final ScrollController _editorScrollController = ScrollController();
 
   final List<_EditableHotspot> _hotspots = [];
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _suppressHotspotFieldRebuild = false;
+  bool _previewDocked = false;
+  bool _previewHovered = false;
 
   @override
   void initState() {
@@ -44,10 +48,13 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
     _xrFirestore = widget.xrFirestore ?? XrFirestore();
     _loadNode();
     _panoUrlController.addListener(_requestRebuild);
+    _editorScrollController.addListener(_onEditorScroll);
   }
 
   @override
   void dispose() {
+    _editorScrollController.removeListener(_onEditorScroll);
+    _editorScrollController.dispose();
     _nameController.dispose();
     _panoUrlController.removeListener(_requestRebuild);
     _panoUrlController.dispose();
@@ -58,8 +65,22 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
   }
 
   void _requestRebuild() {
+    if (_suppressHotspotFieldRebuild) return;
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  void _onEditorScroll() {
+    if (!_editorScrollController.hasClients) return;
+    final shouldDock = _editorScrollController.offset > 220;
+    if (shouldDock != _previewDocked && mounted) {
+      setState(() {
+        _previewDocked = shouldDock;
+        if (!shouldDock) {
+          _previewHovered = false;
+        }
+      });
     }
   }
 
@@ -257,6 +278,87 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
     return Offset(x, y);
   }
 
+  Color _defaultHotspotColor(String type) {
+    return type == 'teleport' ? Colors.orangeAccent : Colors.lightBlueAccent;
+  }
+
+  Color _parseColorHexOrDefault(String? hex, String type) {
+    final fallback = _defaultHotspotColor(type);
+    if (hex == null) return fallback;
+    var input = hex.trim();
+    if (input.isEmpty) return fallback;
+    if (input.startsWith('#')) input = input.substring(1);
+    if (input.length == 6) input = 'FF$input';
+    if (input.length != 8) return fallback;
+    final value = int.tryParse(input, radix: 16);
+    if (value == null) return fallback;
+    return Color(value);
+  }
+
+  IconData _iconForStyle(String style, bool isTeleport) {
+    switch (style) {
+      case 'pin':
+        return Icons.place;
+      case 'star':
+        return Icons.star;
+      case 'flag':
+        return Icons.flag;
+      case 'camera':
+        return Icons.photo_camera;
+      case 'arrow':
+        return Icons.arrow_forward;
+      case 'info':
+        return Icons.info_outline;
+      default:
+        return isTeleport ? Icons.arrow_forward : Icons.info_outline;
+    }
+  }
+
+  void _updateHotspotFromPreviewPoint({
+    required int hotspotIndex,
+    required Offset point,
+    required Size size,
+  }) {
+    if (hotspotIndex < 0 || hotspotIndex >= _hotspots.length) return;
+    if (size.width <= 0 || size.height <= 0) return;
+
+    final clampedX = point.dx.clamp(0.0, size.width).toDouble();
+    final clampedY = point.dy.clamp(0.0, size.height).toDouble();
+
+    final yaw = ((clampedX / size.width) * 360.0) - 180.0;
+    final pitch = 90.0 - ((clampedY / size.height) * 180.0);
+
+    final hotspot = _hotspots[hotspotIndex];
+    final yawText = yaw.toStringAsFixed(1);
+    final pitchText = pitch.toStringAsFixed(1);
+    _suppressHotspotFieldRebuild = true;
+    if (hotspot.yawController.text != yawText) {
+      hotspot.yawController.text = yawText;
+    }
+    if (hotspot.pitchController.text != pitchText) {
+      hotspot.pitchController.text = pitchText;
+    }
+    _suppressHotspotFieldRebuild = false;
+    setState(() {});
+  }
+
+  void _nudgeHotspotFromPreviewDelta({
+    required int hotspotIndex,
+    required Offset delta,
+    required Size size,
+  }) {
+    if (hotspotIndex < 0 || hotspotIndex >= _hotspots.length) return;
+    final hotspot = _hotspots[hotspotIndex];
+    final yaw = double.tryParse(hotspot.yawController.text.trim()) ?? 0.0;
+    final pitch = double.tryParse(hotspot.pitchController.text.trim()) ?? 0.0;
+    final currentPoint = _mapYawPitchToPoint(yaw, pitch, size);
+    _updateHotspotFromPreviewPoint(
+      hotspotIndex: hotspotIndex,
+      point: currentPoint + delta,
+      size: size,
+    );
+  }
+
   bool _isNetworkUrl(String value) {
     return value.startsWith('http://') || value.startsWith('https://');
   }
@@ -406,20 +508,32 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
                     borderRadius: BorderRadius.circular(8),
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: Image.network(
-                        preview.resolvedPreviewUrl!,
+                      child: CachedNetworkImage(
+                        imageUrl: preview.resolvedPreviewUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const ColoredBox(
-                            color: Color(0xFF263238),
-                            child: Center(
-                              child: Text(
-                                'Failed to load preview image',
-                                style: TextStyle(color: Colors.white),
+                        memCacheWidth: 1280,
+                        placeholder: (context, url) => const ColoredBox(
+                          color: Color(0xFF263238),
+                          child: Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Image.network(
+                          preview.resolvedPreviewUrl!,
+                          fit: BoxFit.cover,
+                          cacheWidth: 1280,
+                          errorBuilder: (context, networkError, stackTrace) {
+                            return const ColoredBox(
+                              color: Color(0xFF263238),
+                              child: Center(
+                                child: Text(
+                                  'Failed to load preview image',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -526,12 +640,154 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
     });
   }
 
-  Widget _buildHotspotPreview() {
+  Widget _buildHotspotPreview({bool compact = false, bool floating = false}) {
     final panoUrl = _panoUrlController.text.trim();
     final previewHotspots = _buildPreviewHotspots();
+    final legendItems = <_LegendItem>[];
+    final legendSeen = <String>{};
+    for (var i = 0; i < _hotspots.length; i++) {
+      final hotspot = _hotspots[i];
+      final color = _parseColorHexOrDefault(
+        hotspot.colorHexController.text,
+        hotspot.type,
+      );
+      final key = '${hotspot.type}|${color.toARGB32()}';
+      if (legendSeen.add(key)) {
+        legendItems.add(
+          _LegendItem(
+            color: color,
+            label: hotspot.type == 'teleport'
+                ? 'teleport hotspot'
+                : 'info hotspot',
+          ),
+        );
+      }
+    }
+    final previewHeight = compact ? 110.0 : 180.0;
+    final previewCanvas = ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (panoUrl.startsWith('http://') ||
+                  panoUrl.startsWith('https://'))
+                CachedNetworkImage(
+                  imageUrl: panoUrl,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 2048,
+                  placeholder: (context, url) => const ColoredBox(
+                    color: Color(0xFF263238),
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Image.network(
+                    panoUrl,
+                    fit: BoxFit.cover,
+                    cacheWidth: 2048,
+                    errorBuilder: (context, networkError, stackTrace) {
+                      return const ColoredBox(
+                        color: Color(0xFF263238),
+                        child: Center(
+                          child: Text(
+                            'Panorama failed to load',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                )
+              else
+                const ColoredBox(
+                  color: Color(0xFF263238),
+                  child: Center(
+                    child: Text(
+                      'Add panorama URL to visualize hotspots',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              Container(color: Colors.black.withValues(alpha: 0.18)),
+              Positioned.fill(child: CustomPaint(painter: _GridPainter())),
+              ...previewHotspots.map((h) {
+                final edit = _hotspots[h.index];
+                final markerSize = edit.size.clamp(14.0, 42.0);
+                final point = _mapYawPitchToPoint(h.yaw, h.pitch, size);
+                final isTeleport = h.type == 'teleport';
+                final color = _parseColorHexOrDefault(
+                  edit.colorHexController.text,
+                  h.type,
+                );
+
+                return Positioned(
+                  left: point.dx - (markerSize / 2),
+                  top: point.dy - (markerSize / 2),
+                  child: Tooltip(
+                    message:
+                        '#${h.index + 1} ${h.type}\nYaw: ${h.yaw.toStringAsFixed(1)} | Pitch: ${h.pitch.toStringAsFixed(1)}',
+                    child: GestureDetector(
+                      onPanUpdate: (details) {
+                        _nudgeHotspotFromPreviewDelta(
+                          hotspotIndex: h.index,
+                          delta: details.delta,
+                          size: size,
+                        );
+                      },
+                      child: SizedBox(
+                        width: markerSize,
+                        height: markerSize,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: markerSize,
+                              height: markerSize,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.25),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.3,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: markerSize * 0.65,
+                              height: markerSize * 0.65,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: Icon(
+                                _iconForStyle(edit.icon, isTeleport),
+                                size: markerSize * 0.35,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      ),
+    );
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: floating ? EdgeInsets.zero : const EdgeInsets.only(bottom: 16),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -543,112 +799,40 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Yaw: -180 to 180, Pitch: -90 to 90. Markers move as you edit.',
+              'Yaw: -180 to 180, Pitch: -90 to 90. Markers move as you edit and drag.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: AspectRatio(
-                aspectRatio: 2,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size = Size(
-                      constraints.maxWidth,
-                      constraints.maxHeight,
-                    );
-
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (panoUrl.startsWith('http://') ||
-                            panoUrl.startsWith('https://'))
-                          Image.network(
-                            panoUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const ColoredBox(
-                                color: Color(0xFF263238),
-                                child: Center(
-                                  child: Text(
-                                    'Panorama failed to load',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              );
-                            },
-                          )
-                        else
-                          const ColoredBox(
-                            color: Color(0xFF263238),
-                            child: Center(
-                              child: Text(
-                                'Add panorama URL to visualize hotspots',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        Container(color: Colors.black.withValues(alpha: 0.18)),
-                        Positioned.fill(
-                          child: CustomPaint(painter: _GridPainter()),
-                        ),
-                        ...previewHotspots.map((h) {
-                          final point = _mapYawPitchToPoint(
-                            h.yaw,
-                            h.pitch,
-                            size,
-                          );
-                          final color = h.type == 'teleport'
-                              ? Colors.orange
-                              : Colors.lightBlueAccent;
-
-                          return Positioned(
-                            left: point.dx - 10,
-                            top: point.dy - 10,
-                            child: Tooltip(
-                              message:
-                                  '#${h.index + 1} ${h.type}\nYaw: ${h.yaw.toStringAsFixed(1)} | Pitch: ${h.pitch.toStringAsFixed(1)}',
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Text(
-                                  '${h.index + 1}',
-                                  style: const TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
+            if (floating && compact)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                height: previewHeight,
+                child: previewCanvas,
+              )
+            else
+              AspectRatio(aspectRatio: 2, child: previewCanvas),
             const SizedBox(height: 8),
             Wrap(
               spacing: 12,
               runSpacing: 8,
-              children: const [
-                _LegendDot(
-                  color: Colors.lightBlueAccent,
-                  label: 'info hotspot',
-                ),
-                _LegendDot(color: Colors.orange, label: 'teleport hotspot'),
-              ],
+              children: legendItems.isEmpty
+                  ? const [
+                      _LegendDot(
+                        color: Colors.lightBlueAccent,
+                        label: 'info hotspot',
+                      ),
+                      _LegendDot(
+                        color: Colors.orangeAccent,
+                        label: 'teleport hotspot',
+                      ),
+                    ]
+                  : legendItems
+                        .map(
+                          (item) =>
+                              _LegendDot(color: item.color, label: item.label),
+                        )
+                        .toList(),
             ),
           ],
         ),
@@ -759,6 +943,86 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
               },
             ),
             const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: hotspot.icon,
+                    decoration: const InputDecoration(labelText: 'Marker icon'),
+                    items: const [
+                      DropdownMenuItem(value: 'auto', child: Text('Auto')),
+                      DropdownMenuItem(value: 'info', child: Text('Info')),
+                      DropdownMenuItem(value: 'arrow', child: Text('Arrow')),
+                      DropdownMenuItem(value: 'pin', child: Text('Pin')),
+                      DropdownMenuItem(value: 'star', child: Text('Star')),
+                      DropdownMenuItem(value: 'flag', child: Text('Flag')),
+                      DropdownMenuItem(value: 'camera', child: Text('Camera')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        hotspot.icon = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: hotspot.colorHexController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Color hex',
+                      hintText: '#FF9800',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: ['#4FC3F7', '#FFB74D', '#66BB6A', '#EF5350', '#AB47BC']
+                  .map((hex) {
+                    final swatch = _parseColorHexOrDefault(hex, hotspot.type);
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          hotspot.colorHexController.text = hex;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: swatch,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1),
+                        ),
+                      ),
+                    );
+                  })
+                  .toList(),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Marker size: ${hotspot.size.toStringAsFixed(0)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            Slider(
+              value: hotspot.size.clamp(14.0, 42.0),
+              min: 14,
+              max: 42,
+              divisions: 28,
+              label: hotspot.size.toStringAsFixed(0),
+              onChanged: (value) {
+                setState(() {
+                  hotspot.size = value;
+                });
+              },
+            ),
+            const SizedBox(height: 8),
             if (hotspot.type == 'info') ...[
               TextFormField(
                 controller: hotspot.titleController,
@@ -814,66 +1078,184 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1100),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final isNarrow = width < 760;
+            final canUseFloatingPreview = width >= 920;
+            final contentPadding = EdgeInsets.symmetric(
+              horizontal: isNarrow ? 12 : 16,
+              vertical: isNarrow ? 12 : 16,
+            );
+            final originalPreviewWidth = (constraints.maxWidth - 32)
+                .clamp(280.0, 1068.0)
+                .toDouble();
+
+            return Stack(
               children: [
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Node name'),
-                  validator: (value) => _validateRequired(value, 'Node name'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _panoUrlController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: 'Panorama URL (Firebase Storage URL)',
+                SingleChildScrollView(
+                  controller: _editorScrollController,
+                  padding: contentPadding,
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Node name',
+                          ),
+                          validator: (value) =>
+                              _validateRequired(value, 'Node name'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _panoUrlController,
+                          onChanged: (_) => setState(() {}),
+                          decoration: const InputDecoration(
+                            labelText: 'Panorama URL (Firebase Storage URL)',
+                          ),
+                          validator: (value) =>
+                              _validateRequired(value, 'Panorama URL'),
+                        ),
+                        const SizedBox(height: 16),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          child: canUseFloatingPreview && _previewDocked
+                              ? const SizedBox(key: ValueKey('preview-hidden'))
+                              : KeyedSubtree(
+                                  key: const ValueKey('preview-inline'),
+                                  child: _buildHotspotPreview(),
+                                ),
+                        ),
+                        if (canUseFloatingPreview && _previewDocked)
+                          const SizedBox(height: 8),
+                        if (isNarrow)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hotspots',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: () => _addHotspot('info'),
+                                    icon: const Icon(Icons.info_outline),
+                                    label: const Text('Add Info'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _addHotspot('teleport'),
+                                    icon: const Icon(Icons.open_in_new),
+                                    label: const Text('Add Teleport'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              Text(
+                                'Hotspots',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const Spacer(),
+                              OutlinedButton.icon(
+                                onPressed: () => _addHotspot('info'),
+                                icon: const Icon(Icons.info_outline),
+                                label: const Text('Add Info'),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: () => _addHotspot('teleport'),
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Add Teleport'),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 12),
+                        if (_hotspots.isEmpty)
+                          const Text(
+                            'No hotspots yet. Add info or teleport hotspots.',
+                          ),
+                        for (var i = 0; i < _hotspots.length; i++)
+                          _buildHotspotCard(i),
+                        SizedBox(height: isNarrow ? 112 : 104),
+                      ],
+                    ),
                   ),
-                  validator: (value) =>
-                      _validateRequired(value, 'Panorama URL'),
                 ),
-                const SizedBox(height: 16),
-                _buildHotspotPreview(),
-                Row(
-                  children: [
-                    Text(
-                      'Hotspots',
-                      style: Theme.of(context).textTheme.titleMedium,
+                if (canUseFloatingPreview)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: IgnorePointer(
+                      ignoring: !_previewDocked,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        opacity: _previewDocked ? 1 : 0,
+                        child: MouseRegion(
+                          onEnter: (_) {
+                            if (!mounted) return;
+                            setState(() {
+                              _previewHovered = true;
+                            });
+                          },
+                          onExit: (_) {
+                            if (!mounted) return;
+                            setState(() {
+                              _previewHovered = false;
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            width: _previewHovered ? originalPreviewWidth : 260,
+                            child: _previewHovered
+                                ? _buildHotspotPreview()
+                                : _buildHotspotPreview(
+                                    compact: true,
+                                    floating: true,
+                                  ),
+                          ),
+                        ),
+                      ),
                     ),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      onPressed: () => _addHotspot('info'),
-                      icon: const Icon(Icons.info_outline),
-                      label: const Text('Add Info'),
+                  ),
+                Positioned(
+                  left: isNarrow ? 12 : 16,
+                  right: isNarrow ? 12 : 16,
+                  bottom: 0,
+                  child: SafeArea(
+                    top: false,
+                    child: Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _isSaving ? null : _save,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Save Node'),
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _addHotspot('teleport'),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Add Teleport'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (_hotspots.isEmpty)
-                  const Text('No hotspots yet. Add info or teleport hotspots.'),
-                for (var i = 0; i < _hotspots.length; i++) _buildHotspotCard(i),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _isSaving ? null : _save,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Save Node'),
                   ),
                 ),
               ],
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -931,6 +1313,9 @@ class _EditableHotspot {
   final TextEditingController textController;
   final TextEditingController toNodeIdController;
   final TextEditingController labelController;
+  final TextEditingController colorHexController;
+  String icon;
+  double size;
 
   _EditableHotspot({
     required this.type,
@@ -941,12 +1326,16 @@ class _EditableHotspot {
     String text = '',
     String toNodeId = '',
     String label = '',
+    String colorHex = '',
+    this.icon = 'auto',
+    this.size = 20,
   }) : yawController = TextEditingController(text: yaw),
        pitchController = TextEditingController(text: pitch),
        titleController = TextEditingController(text: title),
        textController = TextEditingController(text: text),
        toNodeIdController = TextEditingController(text: toNodeId),
-       labelController = TextEditingController(text: label) {
+       labelController = TextEditingController(text: label),
+       colorHexController = TextEditingController(text: colorHex) {
     yawController.addListener(onAnyChanged);
     pitchController.addListener(onAnyChanged);
   }
@@ -964,6 +1353,9 @@ class _EditableHotspot {
       text: hotspot.text ?? '',
       toNodeId: hotspot.toNodeId ?? '',
       label: hotspot.label ?? '',
+      colorHex: hotspot.colorHex ?? '',
+      icon: hotspot.icon ?? 'auto',
+      size: hotspot.size ?? 20,
     );
   }
 
@@ -984,6 +1376,11 @@ class _EditableHotspot {
       label: labelController.text.trim().isEmpty
           ? null
           : labelController.text.trim(),
+      colorHex: colorHexController.text.trim().isEmpty
+          ? null
+          : colorHexController.text.trim(),
+      icon: icon.trim().isEmpty ? null : icon.trim(),
+      size: size,
     );
   }
 
@@ -996,6 +1393,7 @@ class _EditableHotspot {
     textController.dispose();
     toNodeIdController.dispose();
     labelController.dispose();
+    colorHexController.dispose();
   }
 }
 
@@ -1054,6 +1452,13 @@ class _LegendDot extends StatelessWidget {
       ],
     );
   }
+}
+
+class _LegendItem {
+  final Color color;
+  final String label;
+
+  const _LegendItem({required this.color, required this.label});
 }
 
 class _GridPainter extends CustomPainter {

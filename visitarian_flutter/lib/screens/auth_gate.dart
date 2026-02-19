@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../admin/xr/admin_access.dart';
-import '../admin/xr/admin_xr_home_screen.dart';
-import '../services/auth_service.dart';
-import 'auth_screen.dart';
-import 'onboarding_screen.dart';
-import 'tour_selection_screen.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
+import 'package:visitarian_flutter/features/admin_xr/admin_xr.dart';
+import 'package:visitarian_flutter/screens/auth_screen.dart';
+import 'package:visitarian_flutter/screens/onboarding_screen.dart';
+import 'package:visitarian_flutter/screens/tour_selection_screen.dart';
 
 class AuthGate extends StatelessWidget {
   AuthGate({super.key});

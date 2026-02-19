@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'tour_selection_styles.dart';
-import '../../theme/app_theme_controller.dart';
+import 'package:visitarian_flutter/core/theme/theme.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_selection_styles.dart';
 
 class TourProfileContent extends StatelessWidget {
   final String username;
@@ -27,100 +27,124 @@ class TourProfileContent extends StatelessWidget {
         final secondaryTextColor = Theme.of(
           context,
         ).colorScheme.onSurfaceVariant;
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 50,
-              backgroundColor: Colors.grey.shade200,
-              backgroundImage: photoUrl.isNotEmpty
-                  ? NetworkImage(photoUrl) as ImageProvider
-                  : null,
-              child: photoUrl.isEmpty
-                  ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              username,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: textColor,
+        final screenSize = MediaQuery.sizeOf(context);
+        final isLandscapePhone =
+            screenSize.width >= 640 && screenSize.height < 560;
+        final avatarRadius = isLandscapePhone ? 38.0 : 50.0;
+        final titleSize = isLandscapePhone ? 20.0 : 24.0;
+        final emailSize = isLandscapePhone ? 14.0 : 16.0;
+        final verticalSpacing = isLandscapePhone ? 10.0 : 16.0;
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: isLandscapePhone ? 12 : 20,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: avatarRadius,
+                backgroundColor: Colors.grey.shade200,
+                backgroundImage: photoUrl.isNotEmpty
+                    ? NetworkImage(photoUrl) as ImageProvider
+                    : null,
+                child: photoUrl.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: isLandscapePhone ? 40 : 50,
+                        color: Colors.grey,
+                      )
+                    : null,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              email,
-              style: TextStyle(fontSize: 16, color: secondaryTextColor),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.dark_mode_outlined),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Dark Mode',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Switch(
-                    value: AppThemeController.instance.isDarkMode,
-                    onChanged: (value) =>
-                        AppThemeController.instance.setDarkMode(value),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: onEditProfile,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: tsPrimaryGreen,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: const Text(
-                'Edit Profile',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: onLogout,
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: const Text(
-                'Logout',
+              SizedBox(height: verticalSpacing),
+              Text(
+                username,
                 style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w700,
+                  fontSize: titleSize,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                email,
+                style: TextStyle(
+                  fontSize: emailSize,
+                  color: secondaryTextColor,
+                ),
+              ),
+              SizedBox(height: verticalSpacing),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: isLandscapePhone ? 4 : 6,
+                ),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.dark_mode_outlined),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Dark Mode',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Switch(
+                      value: AppThemeController.instance.isDarkMode,
+                      onChanged: (value) =>
+                          AppThemeController.instance.setDarkMode(value),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: verticalSpacing),
+              ElevatedButton(
+                onPressed: onEditProfile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: tsPrimaryGreen,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isLandscapePhone ? 24 : 32,
+                    vertical: isLandscapePhone ? 10 : 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: const Text(
+                  'Edit Profile',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+              SizedBox(height: verticalSpacing),
+              OutlinedButton(
+                onPressed: onLogout,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isLandscapePhone ? 24 : 32,
+                    vertical: isLandscapePhone ? 10 : 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

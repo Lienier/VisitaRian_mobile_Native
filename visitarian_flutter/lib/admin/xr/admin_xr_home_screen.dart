@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
-import 'admin_access.dart';
-import 'tour_nodes_screen.dart';
-import '../../services/auth_service.dart';
+import 'package:visitarian_flutter/admin/xr/admin_access.dart';
+import 'package:visitarian_flutter/admin/xr/tour_nodes_screen.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
 
 class AdminXrHomeScreen extends StatefulWidget {
   const AdminXrHomeScreen({super.key});

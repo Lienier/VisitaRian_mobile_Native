@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'tour_selection_styles.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_selection_styles.dart';
 
 class TourSelectionBottomNav extends StatelessWidget {
   final int selectedIndex;
@@ -15,6 +15,8 @@ class TourSelectionBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final size = MediaQuery.sizeOf(context);
+    final isLandscapePhone = size.width >= 640 && size.height < 560;
     final surface = isDark ? scheme.surfaceContainerHigh : scheme.surface;
     return Container(
       decoration: BoxDecoration(
@@ -36,25 +38,28 @@ class TourSelectionBottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: isLandscapePhone ? 4 : 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _NavItem(
                 icon: Icons.home,
                 label: 'Home',
+                compact: isLandscapePhone,
                 active: selectedIndex == 0,
                 onTap: () => onTap(0),
               ),
               _NavItem(
                 icon: Icons.favorite,
                 label: 'Wishlist',
+                compact: isLandscapePhone,
                 active: selectedIndex == 1,
                 onTap: () => onTap(1),
               ),
               _NavItem(
                 icon: Icons.person,
                 label: 'Profile',
+                compact: isLandscapePhone,
                 active: selectedIndex == 2,
                 onTap: () => onTap(2),
               ),
@@ -69,12 +74,14 @@ class TourSelectionBottomNav extends StatelessWidget {
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool compact;
   final bool active;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
+    this.compact = false,
     required this.active,
     required this.onTap,
   });
@@ -90,14 +97,14 @@ class _NavItem extends StatelessWidget {
           Icon(
             icon,
             color: active ? tsPrimaryGreen : secondaryTextColor,
-            size: 24,
+            size: compact ? 22 : 24,
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: compact ? 2 : 4),
           Text(
             label,
             style: TextStyle(
               color: active ? tsPrimaryGreen : secondaryTextColor,
-              fontSize: 12,
+              fontSize: compact ? 11 : 12,
               fontWeight: active ? FontWeight.w600 : FontWeight.normal,
             ),
           ),

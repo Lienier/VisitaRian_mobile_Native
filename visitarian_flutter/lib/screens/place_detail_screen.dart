@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-import 'xr_tour_player_screen.dart';
+import 'package:visitarian_flutter/screens/xr_tour_player_screen.dart';
 
 class PlaceDetailScreen extends StatelessWidget {
   final Place place;
@@ -62,8 +61,15 @@ class PlaceDetailScreen extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
+            final height = constraints.maxHeight;
             final isDesktop = width >= 1000;
-            final pagePadding = isDesktop ? 24.0 : 18.0;
+            final isLandscapePhone = width >= 640 && height < 560;
+            final useSplitLayout = isDesktop || isLandscapePhone;
+            final pagePadding = isDesktop
+                ? 24.0
+                : isLandscapePhone
+                ? 12.0
+                : 18.0;
 
             return Align(
               alignment: Alignment.topCenter,
@@ -71,7 +77,7 @@ class PlaceDetailScreen extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 1360),
                 child: Padding(
                   padding: EdgeInsets.all(pagePadding),
-                  child: isDesktop
+                  child: useSplitLayout
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -83,14 +89,14 @@ class PlaceDetailScreen extends StatelessWidget {
                                 isDesktop: true,
                               ),
                             ),
-                            const SizedBox(width: 18),
+                            SizedBox(width: isLandscapePhone ? 12 : 18),
                             Expanded(
                               flex: 5,
                               child: _buildInfoCard(
                                 context,
                                 place,
                                 pillGreen,
-                                isDesktop: true,
+                                isDesktop: !isLandscapePhone,
                               ),
                             ),
                           ],

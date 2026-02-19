@@ -2,12 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import 'admin_access.dart';
-import 'node_workspace_screen.dart';
-import 'xr_firestore.dart';
-import '../../services/weather_service.dart';
-import '../../services/auth_service.dart';
+import 'package:visitarian_flutter/admin/xr/admin_access.dart';
+import 'package:visitarian_flutter/admin/xr/node_workspace_screen.dart';
+import 'package:visitarian_flutter/admin/xr/xr_firestore.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
 
 class TourNodesScreen extends StatefulWidget {
   final String placeId;
@@ -44,6 +42,7 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
 
   final WeatherService _weatherService = const WeatherService();
   final AuthService _authService = AuthService();
+  bool _reorderingNodes = false;
 
   @override
   void initState() {
@@ -210,7 +209,75 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
 
   Future<void> _createNode() async {
     final newNodeId = _xrFirestore.createNodeId(widget.tourId);
-    await _openNodeWorkspace(initialNodeId: newNodeId);
+    try {
+      await _xrFirestore.createNodeDraft(
+        tourId: widget.tourId,
+        nodeId: newNodeId,
+      );
+      if (!mounted) return;
+      await _openNodeWorkspace(initialNodeId: newNodeId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to create node: $e')));
+    }
+  }
+
+  int _compareNodeDocs(
+    QueryDocumentSnapshot<Map<String, dynamic>> a,
+    QueryDocumentSnapshot<Map<String, dynamic>> b,
+  ) {
+    final aOrder = (a.data()['order'] as num?)?.toInt();
+    final bOrder = (b.data()['order'] as num?)?.toInt();
+    if (aOrder != null && bOrder != null) return aOrder.compareTo(bOrder);
+    if (aOrder != null) return -1;
+    if (bOrder != null) return 1;
+
+    final aTs = a.data()['updatedAt'] as Timestamp?;
+    final bTs = b.data()['updatedAt'] as Timestamp?;
+    if (aTs == null && bTs == null) return 0;
+    if (aTs == null) return 1;
+    if (bTs == null) return -1;
+    return bTs.compareTo(aTs);
+  }
+
+  Future<void> _reorderNodes(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> sortedDocs,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (_reorderingNodes) return;
+    setState(() {
+      _reorderingNodes = true;
+    });
+
+    try {
+      final reordered = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+        sortedDocs,
+      );
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final item = reordered.removeAt(oldIndex);
+      reordered.insert(newIndex, item);
+
+      await _xrFirestore.reorderNodes(
+        tourId: widget.tourId,
+        orderedNodeIds: reordered.map((e) => e.id).toList(growable: false),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to reorder nodes: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _reorderingNodes = false;
+        });
+      }
+    }
   }
 
   Widget _buildPlaceForm() {
@@ -349,14 +416,7 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
 
                       final docs = snapshot.data?.docs ?? const [];
                       final sortedDocs = docs.toList(growable: false)
-                        ..sort((a, b) {
-                          final aTs = a.data()['updatedAt'] as Timestamp?;
-                          final bTs = b.data()['updatedAt'] as Timestamp?;
-                          if (aTs == null && bTs == null) return 0;
-                          if (aTs == null) return 1;
-                          if (bTs == null) return -1;
-                          return bTs.compareTo(aTs);
-                        });
+                        ..sort(_compareNodeDocs);
                       if (sortedDocs.isEmpty) {
                         return const Center(
                           child: Text(
@@ -365,10 +425,11 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
                         );
                       }
 
-                      return ListView.separated(
+                      return ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
                         itemCount: sortedDocs.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
+                        onReorder: (oldIndex, newIndex) =>
+                            _reorderNodes(sortedDocs, oldIndex, newIndex),
                         itemBuilder: (context, index) {
                           final doc = sortedDocs[index];
                           final data = doc.data();
@@ -380,6 +441,7 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
                               startNodeId.isNotEmpty && startNodeId == doc.id;
 
                           return ListTile(
+                            key: ValueKey(doc.id),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                               side: BorderSide(color: Colors.grey.shade300),
@@ -440,6 +502,15 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
                                       child: Text('Set as start node'),
                                     ),
                                   ],
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: Icon(
+                                    Icons.drag_handle,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ],
                             ),

@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import '../services/auth_service.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -235,8 +235,22 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFFE3D6D6);
     const pillGreen = Color(0xFF1B5A45);
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = scheme.surface;
+    final fieldFill = isDark ? scheme.surfaceContainerHigh : Colors.white;
+    final fieldBorder = isDark
+        ? scheme.outline.withValues(alpha: 0.55)
+        : scheme.outline.withValues(alpha: 0.35);
+    final mutedText = scheme.onSurfaceVariant;
+    final softContainer = isDark
+        ? scheme.surfaceContainerHighest
+        : Colors.white.withValues(alpha: 0.85);
+    final cancelBg = isDark
+        ? scheme.surfaceContainerHigh
+        : Colors.grey.shade400;
+    final cancelText = isDark ? scheme.onSurface : Colors.black;
 
     return Scaffold(
       backgroundColor: bg,
@@ -298,7 +312,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   ? 'Picture selected'
                   : 'Tap camera to change picture',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black.withValues(alpha: 0.6)),
+              style: TextStyle(color: mutedText),
             ),
 
             const SizedBox(height: 24),
@@ -309,10 +323,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               decoration: InputDecoration(
                 labelText: 'Username',
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.85),
+                fillColor: fieldFill,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(color: fieldBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: fieldBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: pillGreen, width: 1.4),
                 ),
               ),
             ),
@@ -326,6 +348,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: pillGreen,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -341,7 +364,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             ),
 
             const SizedBox(height: 32),
-            const Divider(),
+            Divider(color: scheme.outline.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
 
             // Change Password Section
@@ -357,13 +380,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
+                  color: softContainer,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
                   _passwordHint ??
                       'Password change is only available for email/password accounts.',
-                  style: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
+                  style: TextStyle(color: mutedText),
                 ),
               )
             else if (!_showPasswordFields)
@@ -373,6 +396,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey.shade700,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -394,10 +418,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 decoration: InputDecoration(
                   labelText: 'Current Password',
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.85),
+                  fillColor: fieldFill,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
+                    borderSide: BorderSide(color: fieldBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: fieldBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: pillGreen, width: 1.4),
                   ),
                 ),
               ),
@@ -408,10 +440,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 decoration: InputDecoration(
                   labelText: 'New Password',
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.85),
+                  fillColor: fieldFill,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
+                    borderSide: BorderSide(color: fieldBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: fieldBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: pillGreen, width: 1.4),
                   ),
                 ),
               ),
@@ -422,6 +462,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: pillGreen,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -439,7 +480,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade400,
+                        backgroundColor: cancelBg,
+                        foregroundColor: cancelText,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -451,10 +493,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       }),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),

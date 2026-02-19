@@ -2,10 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import 'admin_access.dart';
-import 'node_editor_screen.dart';
-import 'xr_firestore.dart';
+import 'package:visitarian_flutter/admin/xr/admin_access.dart';
+import 'package:visitarian_flutter/admin/xr/node_editor_screen.dart';
+import 'package:visitarian_flutter/admin/xr/xr_firestore.dart';
 
 class NodeWorkspaceScreen extends StatefulWidget {
   final String tourId;
@@ -29,6 +28,7 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String? _selectedNodeId;
+  bool _reorderingNodes = false;
 
   @override
   void initState() {
@@ -51,9 +51,24 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
 
   Future<void> _createNode() async {
     final newNodeId = _xrFirestore.createNodeId(widget.tourId);
-    setState(() {
-      _selectedNodeId = newNodeId;
-    });
+    try {
+      await _xrFirestore.createNodeDraft(
+        tourId: widget.tourId,
+        nodeId: newNodeId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedNodeId = newNodeId;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('New node created.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to create node: $e')));
+    }
   }
 
   Future<void> _setStartNode(String nodeId) async {
@@ -62,6 +77,62 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Start node updated.')));
+  }
+
+  int _compareNodeDocs(
+    QueryDocumentSnapshot<Map<String, dynamic>> a,
+    QueryDocumentSnapshot<Map<String, dynamic>> b,
+  ) {
+    final aOrder = (a.data()['order'] as num?)?.toInt();
+    final bOrder = (b.data()['order'] as num?)?.toInt();
+    if (aOrder != null && bOrder != null) return aOrder.compareTo(bOrder);
+    if (aOrder != null) return -1;
+    if (bOrder != null) return 1;
+
+    final aTs = a.data()['updatedAt'] as Timestamp?;
+    final bTs = b.data()['updatedAt'] as Timestamp?;
+    if (aTs == null && bTs == null) return 0;
+    if (aTs == null) return 1;
+    if (bTs == null) return -1;
+    return bTs.compareTo(aTs);
+  }
+
+  Future<void> _reorderNodes(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> sortedDocs,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (_reorderingNodes) return;
+    setState(() {
+      _reorderingNodes = true;
+    });
+
+    try {
+      final reordered = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+        sortedDocs,
+      );
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final item = reordered.removeAt(oldIndex);
+      reordered.insert(newIndex, item);
+
+      await _xrFirestore.reorderNodes(
+        tourId: widget.tourId,
+        orderedNodeIds: reordered.map((e) => e.id).toList(growable: false),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to reorder nodes: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _reorderingNodes = false;
+        });
+      }
+    }
   }
 
   bool _matchesQuery(String nodeId, String name) {
@@ -128,14 +199,7 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
 
                       final docs = snapshot.data?.docs ?? const [];
                       final sortedDocs = docs.toList(growable: false)
-                        ..sort((a, b) {
-                          final aTs = a.data()['updatedAt'] as Timestamp?;
-                          final bTs = b.data()['updatedAt'] as Timestamp?;
-                          if (aTs == null && bTs == null) return 0;
-                          if (aTs == null) return 1;
-                          if (bTs == null) return -1;
-                          return bTs.compareTo(aTs);
-                        });
+                        ..sort(_compareNodeDocs);
 
                       final filteredDocs = sortedDocs
                           .where((doc) {
@@ -161,12 +225,113 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
                         });
                       }
 
-                      return ListView.separated(
-                        itemCount: filteredDocs.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
+                      if (_searchQuery.isNotEmpty) {
+                        return ListView.separated(
+                          itemCount: filteredDocs.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final doc = filteredDocs[index];
+                            final data = doc.data();
+                            final name = (data['name'] ?? '').toString();
+                            final panoUrl = (data['panoUrl'] ?? '').toString();
+                            final hotspots =
+                                (data['hotspots'] as List<dynamic>? ??
+                                const []);
+                            final isStartNode =
+                                startNodeId.isNotEmpty && startNodeId == doc.id;
+                            final isSelected = _selectedNodeId == doc.id;
+
+                            return ListTile(
+                              tileColor: isSelected
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer
+                                  : null,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  _selectedNodeId = doc.id;
+                                });
+                              },
+                              title: Text(name.isEmpty ? doc.id : name),
+                              subtitle: Text(
+                                'Hotspots: ${hotspots.length}\n$panoUrl',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              isThreeLine: true,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isStartNode)
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 6),
+                                      child: Icon(
+                                        Icons.flag,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                  IconButton(
+                                    tooltip: 'Copy node ID',
+                                    icon: const Icon(Icons.copy, size: 18),
+                                    onPressed: () async {
+                                      final messenger = ScaffoldMessenger.of(
+                                        context,
+                                      );
+                                      await Clipboard.setData(
+                                        ClipboardData(text: doc.id),
+                                      );
+                                      if (!mounted) return;
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Node ID copied.'),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        setState(() {
+                                          _selectedNodeId = doc.id;
+                                        });
+                                      } else if (value == 'setStart') {
+                                        _setStartNode(doc.id);
+                                      }
+                                    },
+                                    itemBuilder: (context) => const [
+                                      PopupMenuItem<String>(
+                                        value: 'edit',
+                                        child: Text('Edit node'),
+                                      ),
+                                      PopupMenuItem<String>(
+                                        value: 'setStart',
+                                        child: Text('Set as start node'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      }
+
+                      return ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
+                        itemCount: sortedDocs.length,
+                        onReorder: (oldIndex, newIndex) =>
+                            _reorderNodes(sortedDocs, oldIndex, newIndex),
                         itemBuilder: (context, index) {
-                          final doc = filteredDocs[index];
+                          final doc = sortedDocs[index];
                           final data = doc.data();
                           final name = (data['name'] ?? '').toString();
                           final panoUrl = (data['panoUrl'] ?? '').toString();
@@ -177,6 +342,7 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
                           final isSelected = _selectedNodeId == doc.id;
 
                           return ListTile(
+                            key: ValueKey(doc.id),
                             tileColor: isSelected
                                 ? Theme.of(context).colorScheme.primaryContainer
                                 : null,
@@ -249,6 +415,15 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
                                       child: Text('Set as start node'),
                                     ),
                                   ],
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: Icon(
+                                    Icons.drag_handle,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ],
                             ),

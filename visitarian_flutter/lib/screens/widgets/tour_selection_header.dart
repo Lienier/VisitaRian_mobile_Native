@@ -31,16 +31,23 @@ class TourSelectionHeader extends StatelessWidget {
         final searchHint = (data['searchHint'] ?? 'Search destinations...')
             .toString()
             .trim();
+        final screenSize = MediaQuery.sizeOf(context);
+        final isLandscapePhone =
+            screenSize.width >= 640 && screenSize.height < 560;
+        final titleFontSize = isLandscapePhone ? 24.0 : 32.0;
+        final subtitleFontSize = isLandscapePhone ? 14.0 : 16.0;
+        final containerPadding = isLandscapePhone ? 12.0 : 16.0;
+        final gapAfterSubtitle = isLandscapePhone ? 12.0 : 20.0;
 
         return Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(containerPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 discoverTitle.isEmpty ? 'Discover' : discoverTitle,
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: titleFontSize,
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
@@ -50,9 +57,12 @@ class TourSelectionHeader extends StatelessWidget {
                 discoverSubtitle.isEmpty
                     ? 'Find your perfect destination'
                     : discoverSubtitle,
-                style: TextStyle(fontSize: 16, color: secondaryTextColor),
+                style: TextStyle(
+                  fontSize: subtitleFontSize,
+                  color: secondaryTextColor,
+                ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: gapAfterSubtitle),
               Container(
                 decoration: BoxDecoration(
                   color: cardColor,
