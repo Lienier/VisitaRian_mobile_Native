@@ -14,7 +14,7 @@ service firebase.storage {
 
     // User profile images
     match /profiles/{userId}/{allPaths=**} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if signedIn() && request.auth.uid == userId;
     }
 

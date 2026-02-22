@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:visitarian_flutter/admin/xr/admin_access.dart';
 import 'package:visitarian_flutter/admin/xr/node_editor_screen.dart';
 import 'package:visitarian_flutter/admin/xr/xr_firestore.dart';
 
@@ -467,15 +465,6 @@ class _NodeWorkspaceScreenState extends State<NodeWorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!isAdminEmail(FirebaseAuth.instance.currentUser?.email)) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('XR Node Workspace')),
-        body: const Center(
-          child: Text('Access denied. Admin account required.'),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(title: const Text('XR Node Workspace')),
       body: LayoutBuilder(

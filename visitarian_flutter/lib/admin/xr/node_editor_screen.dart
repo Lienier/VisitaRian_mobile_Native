@@ -1,10 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:visitarian_flutter/admin/xr/admin_access.dart';
 import 'package:visitarian_flutter/admin/xr/xr_firestore.dart';
 import 'package:visitarian_flutter/admin/xr/xr_models.dart';
 
@@ -85,15 +83,6 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
   }
 
   Future<void> _loadNode() async {
-    if (!isAdminEmail(FirebaseAuth.instance.currentUser?.email)) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-
     try {
       final DocumentSnapshot<Map<String, dynamic>> snapshot = await _xrFirestore
           .getNode(tourId: widget.tourId, nodeId: widget.nodeId);
@@ -198,14 +187,6 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
-
-    if (!isAdminEmail(FirebaseAuth.instance.currentUser?.email)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Access denied. Admin account required.')),
-      );
-      return;
-    }
 
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid || !_validateHotspots()) return;
@@ -1263,21 +1244,6 @@ class _NodeEditorScreenState extends State<NodeEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = isAdminEmail(FirebaseAuth.instance.currentUser?.email);
-    if (!isAdmin) {
-      if (widget.embedded) {
-        return const Center(
-          child: Text('Access denied. Admin account required.'),
-        );
-      }
-      return Scaffold(
-        appBar: AppBar(title: const Text('XR Node Editor')),
-        body: const Center(
-          child: Text('Access denied. Admin account required.'),
-        ),
-      );
-    }
-
     if (widget.embedded) {
       return _buildEditorBody(context);
     }

@@ -18,7 +18,7 @@ class WeatherService {
       'format': 'json',
     });
 
-    final geoRes = await http.get(geoUri);
+    final geoRes = await http.get(geoUri).timeout(const Duration(seconds: 10));
     if (geoRes.statusCode != 200) {
       throw Exception('Geocoding request failed (${geoRes.statusCode}).');
     }
@@ -45,7 +45,9 @@ class WeatherService {
       'current_weather': 'true',
     });
 
-    final weatherRes = await http.get(weatherUri);
+    final weatherRes = await http
+        .get(weatherUri)
+        .timeout(const Duration(seconds: 10));
     if (weatherRes.statusCode != 200) {
       throw Exception('Weather request failed (${weatherRes.statusCode}).');
     }

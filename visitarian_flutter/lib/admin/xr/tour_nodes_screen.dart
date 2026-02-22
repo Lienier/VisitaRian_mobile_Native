@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:visitarian_flutter/admin/xr/admin_access.dart';
 import 'package:visitarian_flutter/admin/xr/node_workspace_screen.dart';
 import 'package:visitarian_flutter/admin/xr/xr_firestore.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
@@ -573,16 +571,6 @@ class _TourNodesScreenState extends State<TourNodesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = isAdminEmail(FirebaseAuth.instance.currentUser?.email);
-    if (!isAdmin) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('XR Tour Nodes')),
-        body: const Center(
-          child: Text('Access denied. Admin account required.'),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Unified Place + XR Editor'),

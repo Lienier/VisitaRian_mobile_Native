@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 import 'package:visitarian_flutter/screens/place_detail_screen.dart';
 import 'package:visitarian_flutter/screens/profile_setup_screen.dart';
@@ -22,13 +26,15 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
   String _query = '';
   String _debouncedQuery = '';
   final _auth = AuthService();
+  static const _homeCacheVersion = 'v1';
   Timer? _searchDebounce;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _profileStream;
   bool _homeLoading = true;
   bool _homeRefreshing = false;
   String? _homeError;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _cachedPlaces = [];
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _cachedPopularPlaces = [];
+  List<_CachedPlace> _cachedPlaces = [];
+  List<_CachedPlace> _cachedPopularPlaces = [];
+  Map<String, int> _favoriteCountsByPlaceId = <String, int>{};
   Set<String> _cachedFavorites = <String>{};
 
   @override
@@ -40,7 +46,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
           .collection('users')
           .doc(user.uid)
           .snapshots();
-      _refreshHomeData(initialLoad: true);
+      _loadHomeCacheThenRefresh(user.uid);
     } else {
       _homeLoading = false;
     }
@@ -67,6 +73,210 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     });
   }
 
+  String _homeCacheKey(String uid) =>
+      'tour_home_cache_${_homeCacheVersion}_$uid';
+
+  Future<void> _loadHomeCacheThenRefresh(String uid) async {
+    await _loadHomeCache(uid);
+    if (!mounted) return;
+    unawaited(_refreshHomeData(initialLoad: true));
+  }
+
+  Future<void> _loadHomeCache(String uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_homeCacheKey(uid));
+      if (raw == null || raw.isEmpty) return;
+
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+
+      final rawPlaces = decoded['places'] as List<dynamic>? ?? const [];
+      final rawPopularIds =
+          decoded['popularPlaceIds'] as List<dynamic>? ?? const [];
+      final rawFavorites = decoded['favorites'] as List<dynamic>? ?? const [];
+      final rawFavoriteCounts =
+          decoded['favoriteCountsByPlaceId'] as Map<String, dynamic>? ??
+          const {};
+
+      final places = rawPlaces
+          .whereType<Map<String, dynamic>>()
+          .map(_cachedPlaceFromMap)
+          .where((p) => p.id.isNotEmpty)
+          .toList(growable: false);
+      final placesById = {for (final p in places) p.id: p};
+      final popularPlaces = rawPopularIds
+          .map((e) => e.toString())
+          .map((id) => placesById[id])
+          .whereType<_CachedPlace>()
+          .toList(growable: false);
+      final favorites = rawFavorites
+          .map((e) => e.toString())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      final favoriteCounts = <String, int>{};
+      for (final entry in rawFavoriteCounts.entries) {
+        final count = (entry.value is num)
+            ? (entry.value as num).toInt()
+            : int.tryParse('${entry.value}');
+        if (count != null && count > 0 && entry.key.isNotEmpty) {
+          favoriteCounts[entry.key] = count;
+        }
+      }
+      final computedPopular = _buildPopularPlaces(places, favoriteCounts);
+
+      if (!mounted) return;
+      setState(() {
+        _cachedPlaces = places;
+        _cachedPopularPlaces = computedPopular.isEmpty
+            ? popularPlaces
+            : computedPopular;
+        _favoriteCountsByPlaceId = favoriteCounts;
+        _cachedFavorites = favorites;
+        _homeLoading = false;
+      });
+      final toWarm = computedPopular.isEmpty ? popularPlaces : computedPopular;
+      unawaited(_warmVisibleImageCache(places: places, popularPlaces: toWarm));
+    } catch (_) {
+      // Ignore cache decode failures and continue with network refresh.
+    }
+  }
+
+  _CachedPlace _cachedPlaceFromMap(Map<String, dynamic> item) {
+    final id = (item['id'] ?? '').toString();
+    final data = item['data'];
+    if (id.isEmpty || data is! Map<String, dynamic>) {
+      return const _CachedPlace(id: '', data: <String, dynamic>{});
+    }
+    return _CachedPlace(id: id, data: Map<String, dynamic>.from(data));
+  }
+
+  Map<String, dynamic> _placeDataForCache(Map<String, dynamic> data) {
+    double readDouble(dynamic value) {
+      if (value is num) return value.toDouble();
+      final parsed = double.tryParse('$value');
+      return parsed ?? 0.0;
+    }
+
+    return {
+      'title': (data['title'] ?? '').toString(),
+      'location': (data['location'] ?? '').toString(),
+      'imageUrl': (data['imageUrl'] ?? '').toString(),
+      'distanceKm': readDouble(data['distanceKm']),
+      'weatherCondition': (data['weatherCondition'] ?? 'Unknown').toString(),
+      'description': (data['description'] ?? 'No description available')
+          .toString(),
+      'tourId': (data['tourId'] ?? '').toString(),
+    };
+  }
+
+  Future<void> _persistHomeCache(String uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = <String, dynamic>{
+        'savedAt': DateTime.now().toIso8601String(),
+        'places': _cachedPlaces
+            .where((p) => p.id.isNotEmpty)
+            .map((p) => {'id': p.id, 'data': p.data})
+            .toList(growable: false),
+        'popularPlaceIds': _cachedPopularPlaces
+            .where((p) => p.id.isNotEmpty)
+            .map((p) => p.id)
+            .toList(growable: false),
+        'favoriteCountsByPlaceId': _favoriteCountsByPlaceId,
+        'favorites': _cachedFavorites.toList(growable: false),
+      };
+      await prefs.setString(_homeCacheKey(uid), jsonEncode(payload));
+    } catch (_) {
+      // Ignore cache write failures.
+    }
+  }
+
+  Future<Map<String, int>> _fetchFavoriteCountsForPlaces(
+    List<_CachedPlace> places,
+  ) async {
+    final ids = places
+        .map((p) => p.id)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return <String, int>{};
+
+    const chunkSize = 30;
+    final counts = <String, int>{};
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
+      final snapshot = await FirebaseFirestore.instance
+          .collection('favoriteStats')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snapshot.docs) {
+        final count = (doc.data()['count'] as num?)?.toInt() ?? 0;
+        if (count > 0) {
+          counts[doc.id] = count;
+        }
+      }
+    }
+    return counts;
+  }
+
+  List<_CachedPlace> _buildPopularPlaces(
+    List<_CachedPlace> places,
+    Map<String, int> counts,
+  ) {
+    final ranked = places
+        .where((place) => (counts[place.id] ?? 0) > 0)
+        .toList(growable: false);
+    ranked.sort((a, b) {
+      final countCompare = (counts[b.id] ?? 0).compareTo(counts[a.id] ?? 0);
+      if (countCompare != 0) return countCompare;
+      final titleA = (a.data['title'] ?? '').toString().toLowerCase();
+      final titleB = (b.data['title'] ?? '').toString().toLowerCase();
+      return titleA.compareTo(titleB);
+    });
+    return ranked.take(5).toList(growable: false);
+  }
+
+  void _applyLocalFavoriteDelta(String placeId, {required bool isFavorite}) {
+    final current = _favoriteCountsByPlaceId[placeId] ?? 0;
+    final next = isFavorite ? current + 1 : max(0, current - 1);
+    if (next > 0) {
+      _favoriteCountsByPlaceId[placeId] = next;
+    } else {
+      _favoriteCountsByPlaceId.remove(placeId);
+    }
+    _cachedPopularPlaces = _buildPopularPlaces(
+      _cachedPlaces,
+      _favoriteCountsByPlaceId,
+    );
+  }
+
+  Future<void> _warmVisibleImageCache({
+    required List<_CachedPlace> places,
+    required List<_CachedPlace> popularPlaces,
+  }) async {
+    if (!mounted) return;
+    final urls = <String>{
+      ...popularPlaces
+          .map((p) => (p.data['imageUrl'] ?? '').toString().trim())
+          .where((u) => u.startsWith('http://') || u.startsWith('https://'))
+          .take(6),
+      ...places
+          .map((p) => (p.data['imageUrl'] ?? '').toString().trim())
+          .where((u) => u.startsWith('http://') || u.startsWith('https://'))
+          .take(10),
+    };
+
+    for (final url in urls) {
+      if (!mounted) return;
+      try {
+        await precacheImage(CachedNetworkImageProvider(url), context);
+      } catch (_) {
+        // Best-effort prefetch only.
+      }
+    }
+  }
+
   Future<void> _refreshHomeData({bool initialLoad = false}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -82,7 +292,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     if (!mounted) return;
     setState(() {
       if (initialLoad) {
-        _homeLoading = true;
+        _homeLoading = _cachedPlaces.isEmpty;
       } else {
         _homeRefreshing = true;
       }
@@ -92,28 +302,22 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
       final results = await Future.wait([
         FirebaseFirestore.instance.collection('places').limit(50).get(),
         FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
-        FirebaseFirestore.instance
-            .collection('favoriteStats')
-            .orderBy('count', descending: true)
-            .limit(5)
-            .get(),
       ]);
 
       final placesSnapshot = results[0] as QuerySnapshot<Map<String, dynamic>>;
       final userSnapshot = results[1] as DocumentSnapshot<Map<String, dynamic>>;
-      final favoriteStatsSnapshot =
-          results[2] as QuerySnapshot<Map<String, dynamic>>;
 
-      final placesById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
-        for (final place in placesSnapshot.docs) place.id: place,
-      };
-      final popularPlaces = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-      for (final stat in favoriteStatsSnapshot.docs) {
-        final place = placesById[stat.id];
-        if (place != null) {
-          popularPlaces.add(place);
-        }
-      }
+      final places = placesSnapshot.docs
+          .map(
+            (place) => _CachedPlace(
+              id: place.id,
+              data: _placeDataForCache(place.data()),
+            ),
+          )
+          .toList(growable: false);
+
+      final favoriteCounts = await _fetchFavoriteCountsForPlaces(places);
+      final popularPlaces = _buildPopularPlaces(places, favoriteCounts);
 
       final favoritesList =
           userSnapshot.data()?['favorites'] as List<dynamic>? ?? [];
@@ -123,19 +327,26 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
 
       if (!mounted) return;
       setState(() {
-        _cachedPlaces = placesSnapshot.docs;
+        _cachedPlaces = places;
         _cachedPopularPlaces = popularPlaces;
+        _favoriteCountsByPlaceId = favoriteCounts;
         _cachedFavorites = favoritesSet;
         _homeLoading = false;
         _homeRefreshing = false;
         _homeError = null;
       });
+      unawaited(
+        _warmVisibleImageCache(places: places, popularPlaces: popularPlaces),
+      );
+      unawaited(_persistHomeCache(user.uid));
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _homeLoading = false;
         _homeRefreshing = false;
-        _homeError = 'Failed to refresh destinations.';
+        _homeError = _cachedPlaces.isEmpty
+            ? 'Failed to refresh destinations.'
+            : null;
       });
     }
   }
@@ -147,8 +358,10 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     setState(() {
       if (isFav) {
         _cachedFavorites.remove(placeId);
+        _applyLocalFavoriteDelta(placeId, isFavorite: false);
       } else {
         _cachedFavorites.add(placeId);
+        _applyLocalFavoriteDelta(placeId, isFavorite: true);
       }
     });
 
@@ -162,7 +375,6 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final userSnapshot = await transaction.get(userDoc);
-        final statsSnapshot = await transaction.get(statsDoc);
 
         final currentFavorites = List<String>.from(
           (userSnapshot.data()?['favorites'] as List<dynamic>? ?? const []).map(
@@ -170,28 +382,28 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
           ),
         );
 
+        var delta = 0;
         if (isFav) {
-          currentFavorites.remove(placeId);
+          final removed = currentFavorites.remove(placeId);
+          if (removed) delta = -1;
         } else if (!currentFavorites.contains(placeId)) {
           currentFavorites.add(placeId);
+          delta = 1;
         }
 
         transaction.set(userDoc, {
           'favorites': currentFavorites,
         }, SetOptions(merge: true));
 
-        final currentCount = (statsSnapshot.data()?['count'] as int?) ?? 0;
-        final newCount = isFav ? (currentCount - 1) : (currentCount + 1);
-
-        if (newCount > 0) {
+        if (delta > 0) {
           transaction.set(statsDoc, {
-            'count': newCount,
+            'count': FieldValue.increment(1),
           }, SetOptions(merge: true));
-        } else {
-          transaction.delete(statsDoc);
+        } else if (delta < 0) {
+          transaction.update(statsDoc, {'count': FieldValue.increment(-1)});
         }
       });
-      _refreshHomeData();
+      unawaited(_persistHomeCache(user.uid));
     } catch (e) {
       await _refreshHomeData();
       if (!mounted) return;
@@ -321,7 +533,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     }
 
     final filteredDocs = _cachedPlaces
-        .where((doc) => _matchesQuery((doc.data()['title'] ?? '').toString()))
+        .where((doc) => _matchesQuery((doc.data['title'] ?? '').toString()))
         .toList(growable: false);
 
     return LayoutBuilder(
@@ -378,6 +590,9 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                       SizedBox(
                         height: popularHeight,
                         child: ListView.builder(
+                          key: const PageStorageKey<String>(
+                            'popular-places-list',
+                          ),
                           scrollDirection: Axis.horizontal,
                           padding: EdgeInsets.symmetric(
                             horizontal: horizontalPadding,
@@ -385,8 +600,9 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                           itemCount: _cachedPopularPlaces.length,
                           itemBuilder: (context, index) {
                             final doc = _cachedPopularPlaces[index];
-                            final data = doc.data();
+                            final data = doc.data;
                             return PopularPlaceCard(
+                              key: ValueKey('popular-${doc.id}'),
                               width: popularCardWidth,
                               title: (data['title'] ?? '').toString(),
                               location: (data['location'] ?? '').toString(),
@@ -434,21 +650,36 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                           ? 0.98
                           : 0.8,
                     ),
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final doc = filteredDocs[index];
-                      final data = doc.data();
-                      return DiscoverPlaceCard(
-                        title: (data['title'] ?? '').toString(),
-                        location: (data['location'] ?? '').toString(),
-                        imageUrl: (data['imageUrl'] ?? '').toString(),
-                        isFavorite: _cachedFavorites.contains(doc.id),
-                        onToggleFavorite: () => _toggleFavorite(
-                          doc.id,
-                          _cachedFavorites.contains(doc.id),
-                        ),
-                        onTap: () => _openPlaceDetail(doc.id, data),
-                      );
-                    }, childCount: filteredDocs.length),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final doc = filteredDocs[index];
+                        final data = doc.data;
+                        return DiscoverPlaceCard(
+                          key: ValueKey('discover-${doc.id}'),
+                          title: (data['title'] ?? '').toString(),
+                          location: (data['location'] ?? '').toString(),
+                          imageUrl: (data['imageUrl'] ?? '').toString(),
+                          isFavorite: _cachedFavorites.contains(doc.id),
+                          onToggleFavorite: () => _toggleFavorite(
+                            doc.id,
+                            _cachedFavorites.contains(doc.id),
+                          ),
+                          onTap: () => _openPlaceDetail(doc.id, data),
+                        );
+                      },
+                      childCount: filteredDocs.length,
+                      findChildIndexCallback: (key) {
+                        if (key is! ValueKey<String>) return null;
+                        const prefix = 'discover-';
+                        final value = key.value;
+                        if (!value.startsWith(prefix)) return null;
+                        final id = value.substring(prefix.length);
+                        final index = filteredDocs.indexWhere(
+                          (doc) => doc.id == id,
+                        );
+                        return index == -1 ? null : index;
+                      },
+                    ),
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -496,7 +727,11 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PlaceDetailScreen(place: place, placeId: placeId),
+        builder: (_) => PlaceDetailScreen(
+          key: ValueKey('place-detail-$placeId'),
+          place: place,
+          placeId: placeId,
+        ),
       ),
     );
   }
@@ -568,8 +803,9 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
             itemCount: favoritePlaces.length,
             itemBuilder: (context, index) {
               final doc = favoritePlaces[index];
-              final data = doc.data();
+              final data = doc.data;
               return DiscoverPlaceCard(
+                key: ValueKey('wishlist-${doc.id}'),
                 title: (data['title'] ?? '').toString(),
                 location: (data['location'] ?? '').toString(),
                 imageUrl: (data['imageUrl'] ?? '').toString(),
@@ -621,4 +857,11 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
       ),
     );
   }
+}
+
+class _CachedPlace {
+  final String id;
+  final Map<String, dynamic> data;
+
+  const _CachedPlace({required this.id, required this.data});
 }

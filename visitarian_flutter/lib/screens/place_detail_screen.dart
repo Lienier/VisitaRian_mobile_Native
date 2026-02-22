@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:visitarian_flutter/screens/xr_tour_player_screen.dart';
 
@@ -512,15 +513,27 @@ class _PlaceImage extends StatelessWidget {
     final placeholder = Theme.of(context).colorScheme.surfaceContainerHighest;
 
     if (_looksLikeNetwork(path) && path != 'test') {
-      return Image.network(
-        path,
+      return CachedNetworkImage(
+        key: ValueKey(path),
+        imageUrl: path,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return ColoredBox(
-            color: placeholder,
-            child: Center(child: Icon(Icons.broken_image)),
-          );
-        },
+        memCacheWidth: 1600,
+        fadeInDuration: const Duration(milliseconds: 120),
+        fadeOutDuration: const Duration(milliseconds: 80),
+        placeholder: (context, url) => ColoredBox(
+          color: placeholder,
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => ColoredBox(
+          color: placeholder,
+          child: const Center(child: Icon(Icons.broken_image)),
+        ),
       );
     }
 

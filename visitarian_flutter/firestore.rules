@@ -12,6 +12,29 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    function authEmail() {
+      return request.auth.token.email is string
+          ? request.auth.token.email.lower()
+          : '';
+    }
+
+    // Admin membership documents.
+    match /admins/{userId} {
+      allow read: if signedIn() && (
+          request.auth.uid == userId ||
+          (
+            resource.data.uid is string &&
+            resource.data.uid == request.auth.uid
+          ) ||
+          (
+            resource.data.email is string &&
+            resource.data.email.lower() == authEmail()
+          ) ||
+          isAdmin()
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
     // Users can manage their own profile; block privilege-style fields.
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
@@ -54,8 +77,8 @@ service cloud.firestore {
             request.resource.data.count == resource.data.count - 1
           );
 
-      // Keep delete available for app flow when count drops to zero.
-      allow delete: if signedIn();
+      // Prevent arbitrary counter resets/deletes from client devices.
+      allow delete: if false;
     }
 
     // XR data is public read, admin write.

@@ -1,7 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:visitarian_flutter/admin/xr/admin_access.dart';
 import 'package:visitarian_flutter/admin/xr/tour_nodes_screen.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 
@@ -240,15 +238,6 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!isAdminEmail(FirebaseAuth.instance.currentUser?.email)) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Admin XR')),
-        body: const Center(
-          child: Text('Access denied. Admin account required.'),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin XR Editor'),

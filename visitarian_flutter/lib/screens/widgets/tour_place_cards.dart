@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class PopularPlaceCard extends StatelessWidget {
@@ -260,16 +261,24 @@ class DiscoverPlaceCard extends StatelessWidget {
 
 Widget _cardImage(String imageUrl) {
   if (imageUrl.isNotEmpty) {
-    return Image.network(
-      imageUrl,
+    return CachedNetworkImage(
+      key: ValueKey(imageUrl),
+      imageUrl: imageUrl,
       fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      errorBuilder: (context, error, stackTrace) {
-        return Image.asset(
-          'assets/images/onboarding/slide1.JPG',
-          fit: BoxFit.cover,
-        );
-      },
+      memCacheWidth: 900,
+      fadeInDuration: const Duration(milliseconds: 120),
+      fadeOutDuration: const Duration(milliseconds: 80),
+      placeholder: (context, url) => Container(
+        color: Colors.black12,
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      errorWidget: (context, url, error) =>
+          Image.asset('assets/images/onboarding/slide1.JPG', fit: BoxFit.cover),
     );
   }
   return Image.asset('assets/images/onboarding/slide1.JPG', fit: BoxFit.cover);

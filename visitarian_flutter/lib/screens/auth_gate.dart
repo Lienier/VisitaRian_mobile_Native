@@ -11,6 +11,35 @@ class AuthGate extends StatelessWidget {
   AuthGate({super.key});
 
   final _auth = AuthService();
+  static const Set<String> _localAdminEmailFallback = {
+    'reineilarayat70@gmail.com',
+  };
+
+  Future<bool> _isAdminViaLegacyFields(User user) async {
+    try {
+      final db = FirebaseFirestore.instance;
+
+      final byUid = await db
+          .collection('admins')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+      if (byUid.docs.isNotEmpty) return true;
+
+      final email = (user.email ?? '').trim().toLowerCase();
+      if (email.isEmpty) return false;
+
+      final byEmail = await db
+          .collection('admins')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      return byEmail.docs.isNotEmpty;
+    } on FirebaseException {
+      // If collection query is blocked by rules, treat as non-admin.
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +49,11 @@ class AuthGate extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return _AuthGateErrorScreen(
+            message: 'Auth stream error: ${snapshot.error}',
           );
         }
 
@@ -43,6 +77,11 @@ class AuthGate extends StatelessWidget {
             if (userSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (userSnapshot.hasError) {
+              return _AuthGateErrorScreen(
+                message: 'User profile read error: ${userSnapshot.error}',
               );
             }
 
@@ -83,13 +122,59 @@ class AuthGate extends StatelessWidget {
               return const OnboardingScreen();
             }
 
-            final isAdmin = isAdminEmail(user.email);
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('admins')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (context, adminSnapshot) {
+                if (adminSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (adminSnapshot.hasError) {
+                  // If admin doc read is blocked by current rules, do not block
+                  // login flow. Continue as non-admin.
+                  return const TourSelectionScreen();
+                }
 
-            if (isAdmin) {
-              return const AdminXrHomeScreen();
-            }
+                final isAdmin = adminSnapshot.data?.exists ?? false;
+                if (isAdmin) {
+                  return const AdminXrHomeScreen();
+                }
 
-            return const TourSelectionScreen();
+                return FutureBuilder<bool>(
+                  future: _isAdminViaLegacyFields(user),
+                  builder: (context, legacyAdminSnapshot) {
+                    if (legacyAdminSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Scaffold(
+                        body: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (legacyAdminSnapshot.hasError) {
+                      return _AuthGateErrorScreen(
+                        message:
+                            'Legacy admin query error: ${legacyAdminSnapshot.error}',
+                      );
+                    }
+
+                    final isLegacyAdmin = legacyAdminSnapshot.data ?? false;
+                    final isLocalFallbackAdmin = _localAdminEmailFallback
+                        .contains((user.email ?? '').trim().toLowerCase());
+                    if (isLegacyAdmin) {
+                      return const AdminXrHomeScreen();
+                    }
+                    if (isLocalFallbackAdmin) {
+                      return const AdminXrHomeScreen();
+                    }
+
+                    return const TourSelectionScreen();
+                  },
+                );
+              },
+            );
           },
         );
       },
@@ -196,6 +281,43 @@ class _VerifyEmailScreenState extends State<_VerifyEmailScreen> {
                 child: const Text('Use another account'),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthGateErrorScreen extends StatelessWidget {
+  final String message;
+
+  const _AuthGateErrorScreen({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 12),
+                const Text(
+                  'AuthGate Error',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(message, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => FirebaseAuth.instance.signOut(),
+                  child: const Text('Sign out'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
