@@ -13,6 +13,7 @@ import 'package:visitarian_flutter/screens/widgets/tour_place_cards.dart';
 import 'package:visitarian_flutter/screens/widgets/tour_profile_content.dart';
 import 'package:visitarian_flutter/screens/widgets/tour_selection_bottom_nav.dart';
 import 'package:visitarian_flutter/screens/widgets/tour_selection_header.dart';
+import 'package:visitarian_flutter/screens/widgets/tour_user_map_content.dart';
 
 class TourSelectionScreen extends StatefulWidget {
   const TourSelectionScreen({super.key});
@@ -22,7 +23,7 @@ class TourSelectionScreen extends StatefulWidget {
 }
 
 class _TourSelectionScreenState extends State<TourSelectionScreen> {
-  int _tabIndex = 0; // 0 = Home, 1 = Favorites, 2 = Profile
+  int _tabIndex = 0; // 0 = Home, 1 = Map, 2 = Favorites, 3 = Profile
   String _query = '';
   String _debouncedQuery = '';
   final _auth = AuthService();
@@ -463,7 +464,7 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
                   constraints: const BoxConstraints(maxWidth: 1280),
                   child: Column(
                     children: [
-                      if (_tabIndex != 2)
+                      if (_tabIndex != 3 && _tabIndex != 1)
                         TourSelectionHeader(onSearchChanged: _onSearchChanged),
                       Expanded(child: _buildContent()),
                     ],
@@ -503,6 +504,11 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
           label: Text('Home'),
         ),
         NavigationRailDestination(
+          icon: Icon(Icons.map_outlined),
+          selectedIcon: Icon(Icons.map),
+          label: Text('Map'),
+        ),
+        NavigationRailDestination(
           icon: Icon(Icons.favorite_border),
           selectedIcon: Icon(Icons.favorite),
           label: Text('Wishlist'),
@@ -520,6 +526,8 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     if (_tabIndex == 0) {
       return _buildHomeContent();
     } else if (_tabIndex == 1) {
+      return const TourUserMapContent();
+    } else if (_tabIndex == 2) {
       return _buildWishlistContent();
     } else {
       return _buildProfileContent();

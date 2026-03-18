@@ -52,3 +52,6 @@ android/key.properties
 android/app/*.jks
 android/app/*.keystore
 ios/Runner/GoogleService-Info.plist
+
+# Local app API keys
+lib/config/api_keys.dart

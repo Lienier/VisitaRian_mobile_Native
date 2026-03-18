@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:visitarian_flutter/admin/xr/admin_map_test_screen.dart';
 import 'package:visitarian_flutter/admin/xr/tour_nodes_screen.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 
@@ -242,6 +243,18 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
       appBar: AppBar(
         title: const Text('Admin XR Editor'),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdminMapTestScreen()),
+                );
+              },
+              icon: const Icon(Icons.map),
+              label: const Text('Map Test'),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.icon(
