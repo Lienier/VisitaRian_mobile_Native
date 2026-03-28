@@ -2,12 +2,13 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:visitarian_flutter/config/app_env.dart';
 import 'package:visitarian_flutter/core/theme/theme.dart';
-import 'package:visitarian_flutter/firebase_options.dart';
 
 Future<void> bootstrapApp(Future<void> Function() run) async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await AppEnv.load();
+  await Firebase.initializeApp(options: AppEnv.currentFirebaseOptions);
   final shouldActivateAppCheck =
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||

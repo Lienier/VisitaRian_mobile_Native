@@ -2,6 +2,14 @@
 
 A new Flutter project.
 
+## Environment setup
+
+Sensitive app config now lives in `.env`, which is ignored by git.
+
+1. Copy `.env.example` to `.env`.
+2. Fill in the required Firebase, ORS, and TomTom values.
+3. Run `flutter pub get`.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

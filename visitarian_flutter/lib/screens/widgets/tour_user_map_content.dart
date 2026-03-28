@@ -8,7 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:visitarian_flutter/config/api_keys.dart';
+import 'package:visitarian_flutter/config/app_env.dart';
 
 class TourUserMapContent extends StatefulWidget {
   const TourUserMapContent({super.key});
@@ -22,16 +22,11 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
   static const String _orsHost = 'api.openrouteservice.org';
   static const String _orsPath = '/v2/directions/driving-car/geojson';
   static const String _tomTomHost = 'api.tomtom.com';
-  static const String _tomTomIncidentPath = '/traffic/services/5/incidentDetails';
+  static const String _tomTomIncidentPath =
+      '/traffic/services/5/incidentDetails';
   static const LatLng _defaultCenter = LatLng(14.9083, 121.0509);
-  static const String _envOrsKey = String.fromEnvironment('ORS_API_KEY');
-  static const String _envTomTomKey = String.fromEnvironment('TOMTOM_API_KEY');
-  static final String _orsApiKey = _envOrsKey.isNotEmpty
-      ? _envOrsKey
-      : AppApiKeys.orsApiKey;
-  static final String _tomTomApiKey = _envTomTomKey.isNotEmpty
-      ? _envTomTomKey
-      : AppApiKeys.tomTomApiKey;
+  static String get _orsApiKey => AppEnv.orsApiKey;
+  static String get _tomTomApiKey => AppEnv.tomTomApiKey;
 
   final MapController _mapController = MapController();
   final Distance _distance = const Distance();
@@ -92,7 +87,8 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
       final polygons = <List<List<LatLng>>>[];
       for (final rawFeature in features) {
         final feature = rawFeature as Map<String, dynamic>;
-        final geometry = feature['geometry'] as Map<String, dynamic>? ??
+        final geometry =
+            feature['geometry'] as Map<String, dynamic>? ??
             const <String, dynamic>{};
         final type = (geometry['type'] ?? '').toString();
         final coordinates = geometry['coordinates'];
@@ -131,7 +127,9 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
         _boundaryPolygons = polygons;
         _boundaryPolylines = lines;
         _loadingBoundary = false;
-        _boundaryError = polygons.isEmpty ? 'Boundary geometry is empty.' : null;
+        _boundaryError = polygons.isEmpty
+            ? 'Boundary geometry is empty.'
+            : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -169,7 +167,8 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
       final xj = ring[j].longitude;
       final yj = ring[j].latitude;
 
-      final intersects = ((yi > point.latitude) != (yj > point.latitude)) &&
+      final intersects =
+          ((yi > point.latitude) != (yj > point.latitude)) &&
           (point.longitude <
               (xj - xi) * (point.latitude - yi) / ((yj - yi) + 1e-12) + xi);
       if (intersects) inside = !inside;
@@ -231,24 +230,25 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     _moveTo(currentLatLng, zoom: 15);
 
     _positionSub?.cancel();
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 5,
-      ),
-    ).listen((position) {
-      final updated = LatLng(position.latitude, position.longitude);
-      _captureSpeedSample(position);
-      if (!mounted) return;
-      setState(() {
-        _currentLocation = updated;
-      });
+    _positionSub =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 5,
+          ),
+        ).listen((position) {
+          final updated = LatLng(position.latitude, position.longitude);
+          _captureSpeedSample(position);
+          if (!mounted) return;
+          setState(() {
+            _currentLocation = updated;
+          });
 
-      if (_navigating) {
-        _moveTo(updated);
-        _onLocationUpdateWhileNavigating(updated);
-      }
-    });
+          if (_navigating) {
+            _moveTo(updated);
+            _onLocationUpdateWhileNavigating(updated);
+          }
+        });
     _startEtaRefreshLoop();
   }
 
@@ -259,7 +259,8 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
 
       _refreshEtaSummary();
 
-      final canPeriodicRecompute = _lastRouteComputeAt == null ||
+      final canPeriodicRecompute =
+          _lastRouteComputeAt == null ||
           DateTime.now().difference(_lastRouteComputeAt!) >
               const Duration(seconds: 25);
       if (canPeriodicRecompute) {
@@ -329,7 +330,8 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     if (_routing) return;
     if (_orsApiKey.isEmpty) {
       setState(() {
-        _routeError = 'Missing ORS API key. Set it in lib/config/api_keys.dart.';
+        _routeError =
+            'Missing ORS API key. Add ORS_API_KEY to .env or pass --dart-define.';
       });
       return;
     }
@@ -377,21 +379,26 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
       if (features.isEmpty) throw Exception('No route available.');
 
       final feature = features.first as Map<String, dynamic>;
-      final geometry = feature['geometry'] as Map<String, dynamic>? ??
+      final geometry =
+          feature['geometry'] as Map<String, dynamic>? ??
           const <String, dynamic>{};
       final rawCoords = geometry['coordinates'] as List<dynamic>? ?? const [];
       if (rawCoords.isEmpty) throw Exception('Route geometry is empty.');
 
-      final points = rawCoords.map((entry) {
-        final pair = entry as List<dynamic>;
-        return LatLng(
-          (pair[1] as num).toDouble(),
-          (pair[0] as num).toDouble(),
-        );
-      }).toList(growable: false);
+      final points = rawCoords
+          .map((entry) {
+            final pair = entry as List<dynamic>;
+            return LatLng(
+              (pair[1] as num).toDouble(),
+              (pair[0] as num).toDouble(),
+            );
+          })
+          .toList(growable: false);
 
-      final summary = (feature['properties'] as Map<String, dynamic>? ??
-              const <String, dynamic>{})['summary'] as Map<String, dynamic>? ??
+      final summary =
+          (feature['properties'] as Map<String, dynamic>? ??
+                  const <String, dynamic>{})['summary']
+              as Map<String, dynamic>? ??
           const <String, dynamic>{};
       final distanceMeters = ((summary['distance'] as num?) ?? 0).toDouble();
       final durationSeconds = ((summary['duration'] as num?) ?? 0).toDouble();
@@ -459,9 +466,11 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
 
       for (final raw in incidents) {
         final incident = raw as Map<String, dynamic>;
-        final geometry = incident['geometry'] as Map<String, dynamic>? ??
+        final geometry =
+            incident['geometry'] as Map<String, dynamic>? ??
             const <String, dynamic>{};
-        final properties = incident['properties'] as Map<String, dynamic>? ??
+        final properties =
+            incident['properties'] as Map<String, dynamic>? ??
             const <String, dynamic>{};
         final points = _extractIncidentPoints(geometry);
         if (points.isEmpty) continue;
@@ -493,7 +502,9 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     final type = (geometry['type'] ?? '').toString().toLowerCase();
     final coordinates = geometry['coordinates'];
 
-    if (type == 'point' && coordinates is List<dynamic> && coordinates.length >= 2) {
+    if (type == 'point' &&
+        coordinates is List<dynamic> &&
+        coordinates.length >= 2) {
       return [
         LatLng(
           (coordinates[1] as num).toDouble(),
@@ -531,8 +542,10 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     }
 
     final remainingRouteMeters = _estimateRemainingRouteMeters(current);
-    final progressRatio =
-        (remainingRouteMeters / _routeDistanceMeters).clamp(0.0, 1.0);
+    final progressRatio = (remainingRouteMeters / _routeDistanceMeters).clamp(
+      0.0,
+      1.0,
+    );
     final baseRemainingSeconds = _routeDurationSeconds * progressRatio;
 
     final expectedSpeed = _routeDistanceMeters / _routeDurationSeconds;
@@ -604,8 +617,10 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     }
 
     final offRouteMeters = _distanceToRoutePolyline(current, _routePoints);
-    final canReroute = _lastRerouteAt == null ||
-        DateTime.now().difference(_lastRerouteAt!) > const Duration(seconds: 10);
+    final canReroute =
+        _lastRerouteAt == null ||
+        DateTime.now().difference(_lastRerouteAt!) >
+            const Duration(seconds: 10);
     _refreshEtaSummary();
 
     if (offRouteMeters > 45 && canReroute) {
@@ -678,13 +693,13 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
                   const Icon(Icons.navigation_outlined),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      _statusMessage ?? 'Initializing map...',
-                    ),
+                    child: Text(_statusMessage ?? 'Initializing map...'),
                   ),
                   IconButton(
                     tooltip: 'My location',
-                    onPressed: user == null ? null : () => _moveTo(user, zoom: 16),
+                    onPressed: user == null
+                        ? null
+                        : () => _moveTo(user, zoom: 16),
                     icon: const Icon(Icons.gps_fixed),
                   ),
                   IconButton(
@@ -695,9 +710,13 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
                 ],
               ),
               if (_routeSummary != null) Text(_routeSummary!),
-              if (_loadingBoundary) const Text('Loading Norzagaray boundary...'),
+              if (_loadingBoundary)
+                const Text('Loading Norzagaray boundary...'),
               if (_boundaryError != null)
-                Text('Boundary warning: $_boundaryError', style: TextStyle(color: errorColor)),
+                Text(
+                  'Boundary warning: $_boundaryError',
+                  style: TextStyle(color: errorColor),
+                ),
               if (_routeError != null)
                 Text(_routeError!, style: TextStyle(color: errorColor)),
             ],
@@ -719,7 +738,8 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.visitarian_flutter',
                   ),
                   if (_boundaryPolylines.isNotEmpty)

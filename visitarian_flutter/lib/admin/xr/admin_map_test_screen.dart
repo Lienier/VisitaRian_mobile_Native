@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:visitarian_flutter/config/api_keys.dart';
+import 'package:visitarian_flutter/config/app_env.dart';
 
 class AdminMapTestScreen extends StatefulWidget {
   const AdminMapTestScreen({super.key});
@@ -18,23 +18,18 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
   static const String _apiHost = 'api.openrouteservice.org';
   static const String _routePath = '/v2/directions/driving-car/geojson';
   static const String _tomTomHost = 'api.tomtom.com';
-  static const String _tomTomIncidentPath = '/traffic/services/5/incidentDetails';
+  static const String _tomTomIncidentPath =
+      '/traffic/services/5/incidentDetails';
   static const String _norzagarayGeoJsonPath = 'assets/geo/norzagaray.geojson';
   static const LatLng _defaultCenter = LatLng(14.9083, 121.0509);
-  static const String _envKey = String.fromEnvironment('ORS_API_KEY');
-  static const String _envTomTomKey = String.fromEnvironment('TOMTOM_API_KEY');
   static const String _norzagarayBbox = '120.93,14.83,121.16,14.99';
   static const double _norzagarayWest = 120.93;
   static const double _norzagaraySouth = 14.83;
   static const double _norzagarayEast = 121.16;
   static const double _norzagarayNorth = 14.99;
 
-  static final String _orsApiKey = _envKey.isNotEmpty
-      ? _envKey
-      : AppApiKeys.orsApiKey;
-  static final String _tomTomApiKey = _envTomTomKey.isNotEmpty
-      ? _envTomTomKey
-      : AppApiKeys.tomTomApiKey;
+  static String get _orsApiKey => AppEnv.orsApiKey;
+  static String get _tomTomApiKey => AppEnv.tomTomApiKey;
 
   LatLng? _startPoint;
   LatLng? _endPoint;
@@ -70,7 +65,8 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
       final polygons = <List<List<LatLng>>>[];
       for (final rawFeature in features) {
         final feature = rawFeature as Map<String, dynamic>;
-        final geometry = feature['geometry'] as Map<String, dynamic>? ??
+        final geometry =
+            feature['geometry'] as Map<String, dynamic>? ??
             const <String, dynamic>{};
         final type = (geometry['type'] ?? '').toString();
         final coordinates = geometry['coordinates'];
@@ -100,11 +96,7 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
         for (final ring in polygon) {
           if (ring.length >= 2) {
             boundaryLines.add(
-              Polyline(
-                points: ring,
-                color: Colors.purple,
-                strokeWidth: 2,
-              ),
+              Polyline(points: ring, color: Colors.purple, strokeWidth: 2),
             );
           }
         }
@@ -160,7 +152,8 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
       final xj = ring[j].longitude;
       final yj = ring[j].latitude;
 
-      final intersects = ((yi > point.latitude) != (yj > point.latitude)) &&
+      final intersects =
+          ((yi > point.latitude) != (yj > point.latitude)) &&
           (point.longitude <
               (xj - xi) * (point.latitude - yi) / ((yj - yi) + 1e-12) + xi);
       if (intersects) inside = !inside;
@@ -214,7 +207,8 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
 
     if (_orsApiKey.isEmpty) {
       setState(() {
-        _routeError = 'Missing ORS API key. Set it in lib/config/api_keys.dart.';
+        _routeError =
+            'Missing ORS API key. Add ORS_API_KEY to .env or pass --dart-define.';
       });
       return;
     }
@@ -272,24 +266,29 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
       }
 
       final firstFeature = features.first as Map<String, dynamic>;
-      final geometry = firstFeature['geometry'] as Map<String, dynamic>? ??
+      final geometry =
+          firstFeature['geometry'] as Map<String, dynamic>? ??
           const <String, dynamic>{};
       final coordinates = geometry['coordinates'] as List<dynamic>? ?? const [];
       if (coordinates.isEmpty) {
         throw Exception('Route geometry is empty.');
       }
 
-      final points = coordinates.map((entry) {
-        final pair = entry as List<dynamic>;
-        return LatLng(
-          (pair[1] as num).toDouble(),
-          (pair[0] as num).toDouble(),
-        );
-      }).toList(growable: false);
+      final points = coordinates
+          .map((entry) {
+            final pair = entry as List<dynamic>;
+            return LatLng(
+              (pair[1] as num).toDouble(),
+              (pair[0] as num).toDouble(),
+            );
+          })
+          .toList(growable: false);
 
-      final properties = firstFeature['properties'] as Map<String, dynamic>? ??
+      final properties =
+          firstFeature['properties'] as Map<String, dynamic>? ??
           const <String, dynamic>{};
-      final summary = properties['summary'] as Map<String, dynamic>? ??
+      final summary =
+          properties['summary'] as Map<String, dynamic>? ??
           const <String, dynamic>{};
       final distanceKm = ((summary['distance'] as num?) ?? 0) / 1000;
       final durationMin = ((summary['duration'] as num?) ?? 0) / 60;
@@ -329,7 +328,7 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
     if (_tomTomApiKey.isEmpty) {
       setState(() {
         _trafficError =
-            'Missing TomTom API key. Set it in lib/config/api_keys.dart.';
+            'Missing TomTom API key. Add TOMTOM_API_KEY to .env or pass --dart-define.';
       });
       return;
     }
@@ -368,9 +367,11 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
 
       for (final raw in incidents) {
         final incident = raw as Map<String, dynamic>;
-        final geometry = incident['geometry'] as Map<String, dynamic>? ??
+        final geometry =
+            incident['geometry'] as Map<String, dynamic>? ??
             const <String, dynamic>{};
-        final properties = incident['properties'] as Map<String, dynamic>? ??
+        final properties =
+            incident['properties'] as Map<String, dynamic>? ??
             const <String, dynamic>{};
         final geometryType = (geometry['type'] ?? '').toString().toLowerCase();
         final delaySeconds = (properties['delay'] as num?)?.toInt() ?? 0;
@@ -392,7 +393,8 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
                   message: [
                     if (from.isNotEmpty) 'From: $from',
                     if (to.isNotEmpty) 'To: $to',
-                    if (delaySeconds > 0) 'Delay: ${(delaySeconds / 60).round()} min',
+                    if (delaySeconds > 0)
+                      'Delay: ${(delaySeconds / 60).round()} min',
                   ].join('\n'),
                   child: const Icon(
                     Icons.warning_amber_rounded,
@@ -422,11 +424,7 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
           }
           if (points.isEmpty) continue;
           polylineList.add(
-            Polyline(
-              points: points,
-              color: Colors.deepOrange,
-              strokeWidth: 4,
-            ),
+            Polyline(points: points, color: Colors.deepOrange, strokeWidth: 4),
           );
         }
       }
@@ -471,9 +469,7 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
     final allMarkers = [...routeMarkers, ..._incidentMarkers];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin ORS Route Test'),
-      ),
+      appBar: AppBar(title: const Text('Admin ORS Route Test')),
       body: Column(
         children: [
           Padding(
@@ -505,7 +501,9 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
-                      onPressed: _loadingTraffic ? null : _fetchTrafficIncidents,
+                      onPressed: _loadingTraffic
+                          ? null
+                          : _fetchTrafficIncidents,
                       icon: _loadingTraffic
                           ? const SizedBox(
                               width: 14,
@@ -545,7 +543,9 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _routeError!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
                 if (_trafficSummary != null)
@@ -558,7 +558,9 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _trafficError!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
               ],
