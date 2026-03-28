@@ -6,10 +6,27 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      // Admin membership comes from Firestore document existence:
-      // /admins/{uid}
-      return signedIn() &&
-          exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return signedIn() && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          userRoleIsAdmin()
+      );
+    }
+
+    function userRoleIsAdmin() {
+      let userDoc = get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      );
+      let role = userDoc.data.role;
+      return userDoc.data.admin == true ||
+          userDoc.data.isAdmin == true ||
+          (
+            role is string &&
+            (
+              role.lower() == 'admin' ||
+              role.lower() == 'superadmin' ||
+              role.lower() == 'super_admin'
+            )
+          );
     }
 
     function authEmail() {

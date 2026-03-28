@@ -11,35 +11,6 @@ class AuthGate extends StatelessWidget {
   AuthGate({super.key});
 
   final _auth = AuthService();
-  static const Set<String> _localAdminEmailFallback = {
-    'reineilarayat70@gmail.com',
-  };
-
-  Future<bool> _isAdminViaLegacyFields(User user) async {
-    try {
-      final db = FirebaseFirestore.instance;
-
-      final byUid = await db
-          .collection('admins')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
-      if (byUid.docs.isNotEmpty) return true;
-
-      final email = (user.email ?? '').trim().toLowerCase();
-      if (email.isEmpty) return false;
-
-      final byEmail = await db
-          .collection('admins')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      return byEmail.docs.isNotEmpty;
-    } on FirebaseException {
-      // If collection query is blocked by rules, treat as non-admin.
-      return false;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,11 +93,16 @@ class AuthGate extends StatelessWidget {
               return const OnboardingScreen();
             }
 
-            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('admins')
-                  .doc(user.uid)
-                  .snapshots(),
+            if (userDataHasAdminRole(userData)) {
+              return const AdminXrHomeScreen();
+            }
+
+            return FutureBuilder<bool>(
+              future: isAdmin(
+                user.uid,
+                email: user.email,
+                userData: userData,
+              ),
               builder: (context, adminSnapshot) {
                 if (adminSnapshot.connectionState == ConnectionState.waiting) {
                   return const Scaffold(
@@ -134,45 +110,17 @@ class AuthGate extends StatelessWidget {
                   );
                 }
                 if (adminSnapshot.hasError) {
-                  // If admin doc read is blocked by current rules, do not block
-                  // login flow. Continue as non-admin.
-                  return const TourSelectionScreen();
+                  return _AuthGateErrorScreen(
+                    message: 'Admin access check error: ${adminSnapshot.error}',
+                  );
                 }
 
-                final isAdmin = adminSnapshot.data?.exists ?? false;
-                if (isAdmin) {
+                final hasAdminAccess = adminSnapshot.data ?? false;
+                if (hasAdminAccess) {
                   return const AdminXrHomeScreen();
                 }
 
-                return FutureBuilder<bool>(
-                  future: _isAdminViaLegacyFields(user),
-                  builder: (context, legacyAdminSnapshot) {
-                    if (legacyAdminSnapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (legacyAdminSnapshot.hasError) {
-                      return _AuthGateErrorScreen(
-                        message:
-                            'Legacy admin query error: ${legacyAdminSnapshot.error}',
-                      );
-                    }
-
-                    final isLegacyAdmin = legacyAdminSnapshot.data ?? false;
-                    final isLocalFallbackAdmin = _localAdminEmailFallback
-                        .contains((user.email ?? '').trim().toLowerCase());
-                    if (isLegacyAdmin) {
-                      return const AdminXrHomeScreen();
-                    }
-                    if (isLocalFallbackAdmin) {
-                      return const AdminXrHomeScreen();
-                    }
-
-                    return const TourSelectionScreen();
-                  },
-                );
+                return const TourSelectionScreen();
               },
             );
           },

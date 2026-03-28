@@ -110,6 +110,16 @@ void main() {
         );
       });
 
+      test('TC012A: User role field grants admin access', () {
+        expect(
+          _simulateAuthGate(
+            hasUser: true,
+            hasAdminRole: true,
+          ),
+          equals('AdminXrHomeScreen'),
+        );
+      });
+
       test('TC013: Fallback on route/doc errors', () {
         expect(
           _simulateAuthGate(
@@ -418,9 +428,9 @@ void main() {
       test('TC054: Public routes do not reveal admin-only screens', () {
         expect(
           _shouldAccessAdmin(
+            hasAdminRole: false,
             isAdminDoc: false,
             isLegacyAdmin: false,
-            isLocalFallbackAdmin: false,
           ),
           isFalse,
         );
@@ -470,9 +480,9 @@ String _simulateAuthGate({
   bool isEmailVerified = true,
   bool hasSeenOnboarding = true,
   bool usersDocError = false,
+  bool hasAdminRole = false,
   bool isAdminDoc = false,
   bool isAdminLegacy = false,
-  bool isLocalFallbackAdmin = false,
   int? lastLoginAgeInDays,
 }) {
   if (!hasUser) return 'AuthScreen';
@@ -480,7 +490,7 @@ String _simulateAuthGate({
   if (usersDocError) return 'AuthGateError';
   if (lastLoginAgeInDays != null && lastLoginAgeInDays >= 90) return 'AuthScreen';
   if (!hasSeenOnboarding) return 'OnboardingScreen';
-  if (isAdminDoc || isAdminLegacy || isLocalFallbackAdmin) return 'AdminXrHomeScreen';
+  if (hasAdminRole || isAdminDoc || isAdminLegacy) return 'AdminXrHomeScreen';
   return 'TourSelectionScreen';
 }
 
@@ -739,9 +749,9 @@ bool _hasRouteCapability({required String orsApiKey}) =>
 bool _hasTomTomCapability({required String key}) => key.trim().isNotEmpty;
 
 bool _shouldAccessAdmin({
+  required bool hasAdminRole,
   required bool isAdminDoc,
   required bool isLegacyAdmin,
-  required bool isLocalFallbackAdmin,
 }) {
-  return isAdminDoc || isLegacyAdmin || isLocalFallbackAdmin;
+  return hasAdminRole || isAdminDoc || isLegacyAdmin;
 }
