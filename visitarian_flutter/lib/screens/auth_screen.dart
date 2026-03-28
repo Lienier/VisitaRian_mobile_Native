@@ -109,6 +109,12 @@ class _AuthScreenState extends State<AuthScreen> {
         return error.message ??
             'This email must use its original sign-in method.';
       }
+      if (error.code == 'google-sign-in-misconfigured' ||
+          error.code == 'google-sign-in-failed' ||
+          error.code == 'google-sign-in-unsupported-platform') {
+        return error.message ??
+            'Google sign-in is not fully configured for this app yet.';
+      }
       return error.message ?? 'Authentication failed.';
     }
     return 'Authentication failed.';

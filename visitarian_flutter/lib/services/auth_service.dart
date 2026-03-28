@@ -1,10 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:visitarian_flutter/config/app_env.dart';
 
 class AuthService {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
+  late final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: kIsWeb
+        ? AppEnv.googleWebClientId
+        : (defaultTargetPlatform == TargetPlatform.iOS
+              ? AppEnv.googleIosClientId
+              : null),
+    serverClientId: kIsWeb ? null : AppEnv.googleWebClientId,
+    scopes: const <String>['email'],
+  );
 
   Stream<User?> authStateChanges() => _auth.userChanges();
 
@@ -60,10 +72,8 @@ class AuthService {
 
     if (user != null) {
       await _updateLastLogin(user.uid);
-      // Ensure hasSeenOnboarding is initialized for existing users
       final doc = await _db.collection('users').doc(user.uid).get();
       if (doc.exists && !(doc.data()?['hasSeenOnboarding'] ?? false)) {
-        // If field doesn't exist, set it to true (existing users have already seen app)
         if (!doc.data()!.containsKey('hasSeenOnboarding')) {
           await _db.collection('users').doc(user.uid).set({
             'hasSeenOnboarding': true,
@@ -76,14 +86,54 @@ class AuthService {
   }
 
   Future<User?> signInWithGoogle() async {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) return null; // user cancelled
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider();
+      provider.setCustomParameters(<String, String>{
+        'prompt': 'select_account',
+      });
+      final userCred = await _auth.signInWithPopup(provider);
+      final user = userCred.user;
+      if (user != null) {
+        await _syncGoogleUserProfile(user);
+      }
+      return user;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      throw FirebaseAuthException(
+        code: 'google-sign-in-unsupported-platform',
+        message:
+            'Google sign-in is not supported in this desktop build yet. Use Chrome or Edge for now.',
+      );
+    }
+
+    GoogleSignInAccount? googleUser;
+    try {
+      await _googleSignIn.signOut();
+      googleUser = await _googleSignIn.signIn();
+    } catch (_) {
+      throw FirebaseAuthException(
+        code: 'google-sign-in-failed',
+        message:
+            'Google sign-in could not start. Check the Firebase and Google app setup.',
+      );
+    }
+    if (googleUser == null) return null;
 
     final googleAuth = await googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'google-sign-in-misconfigured',
+        message:
+            'Google sign-in is missing an ID token. Check the OAuth client IDs and platform configuration.',
+      );
+    }
 
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
+      idToken: idToken,
     );
 
     UserCredential userCred;
@@ -99,47 +149,47 @@ class AuthService {
       }
       rethrow;
     }
+
     final user = userCred.user;
-
     if (user != null) {
-      // Fetch existing document to preserve/migrate onboarding flag for older accounts
-      final docRef = _db.collection('users').doc(user.uid);
-      final doc = await docRef.get();
-
-      bool hasSeenOnboarding = false;
-
-      if (doc.exists) {
-        final data = doc.data();
-        if (data != null && data.containsKey('hasSeenOnboarding')) {
-          hasSeenOnboarding = (data['hasSeenOnboarding'] ?? false) as bool;
-        } else {
-          // Infer from createdAt if possible
-          final createdAt = data?['createdAt'] as Timestamp?;
-          if (createdAt != null) {
-            final days = DateTime.now().difference(createdAt.toDate()).inDays;
-            hasSeenOnboarding = days > 30;
-          } else {
-            // Default to true for safety (existing user)
-            hasSeenOnboarding = true;
-          }
-        }
-      } else {
-        // New user signing in with Google — show onboarding
-        hasSeenOnboarding = false;
-      }
-
-      await docRef.set({
-        'username': user.displayName ?? '',
-        'email': user.email,
-        'provider': 'google',
-        'photoUrl': user.photoURL,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'lastLoginAt': FieldValue.serverTimestamp(),
-        'hasSeenOnboarding': hasSeenOnboarding,
-      }, SetOptions(merge: true));
+      await _syncGoogleUserProfile(user);
     }
 
     return user;
+  }
+
+  Future<void> _syncGoogleUserProfile(User user) async {
+    final docRef = _db.collection('users').doc(user.uid);
+    final doc = await docRef.get();
+
+    bool hasSeenOnboarding = false;
+
+    if (doc.exists) {
+      final data = doc.data();
+      if (data != null && data.containsKey('hasSeenOnboarding')) {
+        hasSeenOnboarding = (data['hasSeenOnboarding'] ?? false) as bool;
+      } else {
+        final createdAt = data?['createdAt'] as Timestamp?;
+        if (createdAt != null) {
+          final days = DateTime.now().difference(createdAt.toDate()).inDays;
+          hasSeenOnboarding = days > 30;
+        } else {
+          hasSeenOnboarding = true;
+        }
+      }
+    } else {
+      hasSeenOnboarding = false;
+    }
+
+    await docRef.set({
+      'username': user.displayName ?? '',
+      'email': user.email,
+      'provider': 'google',
+      'photoUrl': user.photoURL,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastLoginAt': FieldValue.serverTimestamp(),
+      'hasSeenOnboarding': hasSeenOnboarding,
+    }, SetOptions(merge: true));
   }
 
   Future<void> _updateLastLogin(String uid) async {
@@ -148,7 +198,6 @@ class AuthService {
     }, SetOptions(merge: true));
   }
 
-  /// Check if user needs to re-authenticate (90 days since last login)
   Future<bool> isReAuthRequired() async {
     final user = _auth.currentUser;
     if (user == null) return true;
@@ -168,7 +217,6 @@ class AuthService {
     }
   }
 
-  /// Check if user has seen onboarding
   Future<bool> hasSeenOnboarding() async {
     final user = _auth.currentUser;
     if (user == null) return false;
@@ -181,7 +229,6 @@ class AuthService {
     }
   }
 
-  /// Mark onboarding as seen
   Future<void> markOnboardingAsSeen() async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -191,7 +238,6 @@ class AuthService {
     }, SetOptions(merge: true));
   }
 
-  /// Change user password
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -201,7 +247,6 @@ class AuthService {
       throw Exception('No user logged in');
     }
 
-    // Re-authenticate first
     final credential = EmailAuthProvider.credential(
       email: user.email!,
       password: currentPassword,
@@ -217,9 +262,9 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      await GoogleSignIn().signOut();
+      await _googleSignIn.signOut();
     } catch (e) {
-      // Continue even if Google sign out fails
+      // Continue even if Google sign out fails.
     }
     await _auth.signOut();
   }
