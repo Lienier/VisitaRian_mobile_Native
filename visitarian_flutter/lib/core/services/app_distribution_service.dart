@@ -141,7 +141,11 @@ class AppDistributionService {
   Future<bool> _openUrl(String value) async {
     final uri = Uri.tryParse(value);
     if (uri == null) return false;
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
+    return launchUrl(
+      uri,
+      mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
   }
 
   static int compareVersions(String left, String right) {

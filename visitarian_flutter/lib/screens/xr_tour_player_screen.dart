@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:panorama_viewer/panorama_viewer.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
 
 enum _ViewMode { embedded, normalFullscreen, vrCardboard }
 
@@ -28,8 +29,10 @@ class XrTourPlayerScreen extends StatefulWidget {
 
 class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final AppDistributionService _distribution = AppDistributionService.instance;
 
   bool _loading = true;
+  bool _openingDistributionLink = false;
   bool _gyroEnabled = true;
   bool _resolvingPanoUrl = false;
   String? _error;
@@ -519,6 +522,114 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
     });
   }
 
+  Future<void> _openAndroidAppDownload() async {
+    if (_openingDistributionLink) return;
+    setState(() => _openingDistributionLink = true);
+    try {
+      final config = await _distribution.fetchConfig();
+      final opened = await _distribution.openAndroidApk(config);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Android app download link is not configured yet.'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Android app download link is not configured yet.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _openingDistributionLink = false);
+      }
+    }
+  }
+
+  Widget _buildWebVrDownloadCard({
+    bool compact = false,
+    EdgeInsetsGeometry margin = EdgeInsets.zero,
+  }) {
+    return FutureBuilder<AppDistributionConfig>(
+      future: _distribution.fetchConfig(),
+      builder: (context, snapshot) {
+        final config = snapshot.data;
+        if (config == null || config.androidApkUrl.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final textTheme = Theme.of(context).textTheme;
+        final bodyColor = compact ? Colors.white70 : textTheme.bodyMedium?.color;
+
+        return Container(
+          width: double.infinity,
+          margin: margin,
+          padding: EdgeInsets.all(compact ? 12 : 14),
+          decoration: BoxDecoration(
+            color: compact
+                ? Colors.white.withValues(alpha: 0.10)
+                : Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: compact
+                  ? Colors.white24
+                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'VR works best in the Android app',
+                style: (compact
+                        ? textTheme.titleSmall
+                        : textTheme.titleMedium)
+                    ?.copyWith(
+                      color: compact ? Colors.white : null,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Web users can keep exploring here, but full phone VR mode is available in the Android APK.',
+                style: (compact
+                        ? textTheme.bodySmall
+                        : textTheme.bodyMedium)
+                    ?.copyWith(color: bodyColor),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: compact
+                    ? ElevatedButton.icon(
+                        onPressed: _openingDistributionLink
+                            ? null
+                            : _openAndroidAppDownload,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                        ),
+                        icon: const Icon(Icons.download),
+                        label: const Text('Download Android APK'),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: _openingDistributionLink
+                            ? null
+                            : _openAndroidAppDownload,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Download Android APK'),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildEntryOverlay(String title) {
     return Positioned.fill(
       child: GestureDetector(
@@ -597,15 +708,25 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                         ),
                       ),
                       if (!_supportsVrCardboard)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'VR mode is only available on Android/iOS devices.',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                'VR mode is only available on Android/iOS devices.',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (kIsWeb)
+                              _buildWebVrDownloadCard(
+                                compact: true,
+                                margin: const EdgeInsets.only(top: 12),
+                              ),
+                          ],
                         ),
                       const SizedBox(height: 10),
                       SizedBox(
@@ -1156,6 +1277,10 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                       : 'Drag to look. Gyro is disabled on web.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                if (kIsWeb)
+                  _buildWebVrDownloadCard(
+                    margin: const EdgeInsets.only(top: 12),
+                  ),
               ],
             ),
           ),

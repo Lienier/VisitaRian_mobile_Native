@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'package:visitarian_flutter/core/services/services.dart';
@@ -342,17 +343,57 @@ class _AuthScreenState extends State<AuthScreen> {
                   final config = snapshot.data;
                   final buttons = <Widget>[
                     if (config != null && config.androidApkUrl.isNotEmpty)
-                      SizedBox(
+                      Container(
                         width: double.infinity,
-                        height: 48,
-                        child: TextButton.icon(
-                          onPressed: _openingDistributionLink
-                              ? null
-                              : () => _openDistributionLink(
-                                  _distribution.openAndroidApk,
-                                ),
-                          icon: const Icon(Icons.download),
-                          label: const Text('Download Android APK'),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade300),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Want the Android app?',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: darkText,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              kIsWeb
+                                  ? 'Download the APK for the full mobile VR experience.'
+                                  : 'Download or share the latest Android installer from here.',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: TextButton.icon(
+                                onPressed: _openingDistributionLink
+                                    ? null
+                                    : () => _openDistributionLink(
+                                        _distribution.openAndroidApk,
+                                      ),
+                                icon: const Icon(Icons.download),
+                                label: const Text('Download Android APK'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                   ];

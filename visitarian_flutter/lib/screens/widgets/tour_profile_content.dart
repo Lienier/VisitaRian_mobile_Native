@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
 import 'package:visitarian_flutter/core/theme/theme.dart';
 import 'package:visitarian_flutter/screens/widgets/tour_selection_styles.dart';
 
@@ -123,6 +124,61 @@ class TourProfileContent extends StatelessWidget {
                 ),
               ),
               SizedBox(height: verticalSpacing),
+              FutureBuilder<AppDistributionConfig>(
+                future: AppDistributionService.instance.fetchConfig(),
+                builder: (context, snapshot) {
+                  final config = snapshot.data;
+                  if (config == null || config.androidApkUrl.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Android app download',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Install the latest APK if you want the mobile app or full VR mode.',
+                              style: TextStyle(
+                                color: secondaryTextColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  AppDistributionService.instance.openAndroidApk(
+                                    config,
+                                  );
+                                },
+                                icon: const Icon(Icons.download),
+                                label: const Text('Download Android APK'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: verticalSpacing),
+                    ],
+                  );
+                },
+              ),
               OutlinedButton(
                 onPressed: onLogout,
                 style: OutlinedButton.styleFrom(
