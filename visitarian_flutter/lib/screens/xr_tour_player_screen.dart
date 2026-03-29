@@ -1277,10 +1277,6 @@ class _XrTourPlayerScreenState extends State<XrTourPlayerScreen> {
                       : 'Drag to look. Gyro is disabled on web.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-                if (kIsWeb)
-                  _buildWebVrDownloadCard(
-                    margin: const EdgeInsets.only(top: 12),
-                  ),
               ],
             ),
           ),
