@@ -355,20 +355,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           label: const Text('Download Android APK'),
                         ),
                       ),
-                    if (config != null && config.websiteUrl.isNotEmpty)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: TextButton.icon(
-                          onPressed: _openingDistributionLink
-                              ? null
-                              : () => _openDistributionLink(
-                                  _distribution.openWebsite,
-                                ),
-                          icon: const Icon(Icons.public),
-                          label: const Text('Open Website'),
-                        ),
-                      ),
                   ];
 
                   if (buttons.isEmpty) {

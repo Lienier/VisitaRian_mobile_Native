@@ -1,4 +1,4 @@
-package com.example.visitarian_flutter
+package app.visitarian.mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

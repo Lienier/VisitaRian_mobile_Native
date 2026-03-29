@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:112732840406:android:3acc5ab3385445fcf10477",
         "android_client_info": {
-          "package_name": "com.example.visitarian_flutter"
+          "package_name": "app.visitarian.mobile"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "112732840406-uduv2rb23h219ok282mh9t1l4es1d3qg.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.example.visitarian_flutter",
+            "package_name": "app.visitarian.mobile",
             "certificate_hash": "56e2098811d7aaa79cca6b3e4f6102973d3161eb"
           }
         },
