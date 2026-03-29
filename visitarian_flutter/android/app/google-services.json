@@ -7,17 +7,69 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:112732840406:android:3acc5ab3385445fcf10477",
+        "mobilesdk_app_id": "1:112732840406:android:35e2d88b28e8c3b5f10477",
         "android_client_info": {
           "package_name": "app.visitarian.mobile"
         }
       },
       "oauth_client": [
         {
-          "client_id": "112732840406-uduv2rb23h219ok282mh9t1l4es1d3qg.apps.googleusercontent.com",
+          "client_id": "112732840406-nu2g64afsi78bvmct5vpm83tloui1sr5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "app.visitarian.mobile",
+            "certificate_hash": "180a5be08f2cba5459d11a07aebe32ff0755fee8"
+          }
+        },
+        {
+          "client_id": "112732840406-52hjfkukqpuumkbq8pqvnqr5rnd772aa.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMdV0mlfHnfmD-0g71seSf11mcZjAjuyY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "112732840406-52hjfkukqpuumkbq8pqvnqr5rnd772aa.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "112732840406-dlnh8lajne9pcr8dsl0a3nu4oe09g7qr.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.visitarianFlutter"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:112732840406:android:3acc5ab3385445fcf10477",
+        "android_client_info": {
+          "package_name": "com.example.visitarian_flutter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "112732840406-osh6l7bocgflp08fkrc2ivfpcoam4nl1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.visitarian_flutter",
+            "certificate_hash": "180a5be08f2cba5459d11a07aebe32ff0755fee8"
+          }
+        },
+        {
+          "client_id": "112732840406-uduv2rb23h219ok282mh9t1l4es1d3qg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.visitarian_flutter",
             "certificate_hash": "56e2098811d7aaa79cca6b3e4f6102973d3161eb"
           }
         },
