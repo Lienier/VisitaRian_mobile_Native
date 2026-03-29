@@ -5,6 +5,10 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AppDistributionConfig {
+  static const defaultWebsiteUrl = 'https://www.visitarian.app';
+  static const defaultAndroidApkUrl =
+      'https://www.visitarian.app/downloads/app-arm64-v8a-release.apk';
+
   const AppDistributionConfig({
     required this.websiteUrl,
     required this.androidApkUrl,
@@ -17,10 +21,13 @@ class AppDistributionConfig {
   factory AppDistributionConfig.fromMap(Map<String, dynamic>? data) {
     final source = data ?? const <String, dynamic>{};
     return AppDistributionConfig(
-      websiteUrl: (source['websiteUrl'] ?? 'https://visitarian.app')
-          .toString()
-          .trim(),
-      androidApkUrl: (source['androidApkUrl'] ?? '').toString().trim(),
+      websiteUrl: ((source['websiteUrl'] ?? '').toString().trim().isEmpty
+              ? defaultWebsiteUrl
+              : (source['websiteUrl'] ?? '').toString().trim()),
+      androidApkUrl:
+          ((source['androidApkUrl'] ?? '').toString().trim().isEmpty
+              ? defaultAndroidApkUrl
+              : (source['androidApkUrl'] ?? '').toString().trim()),
       latestVersion: (source['latestVersion'] ?? '').toString().trim(),
       minSupportedVersion: (source['minSupportedVersion'] ?? '')
           .toString()
