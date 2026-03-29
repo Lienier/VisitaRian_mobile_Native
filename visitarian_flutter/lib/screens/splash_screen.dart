@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:visitarian_flutter/core/services/services.dart';
 import 'package:visitarian_flutter/screens/auth_gate.dart';
+import 'package:visitarian_flutter/screens/update_required_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,24 +12,44 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  Timer? _timer;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
-
-    _timer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => AuthGate()));
-    });
+    _boot();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _boot() async {
+    final wait = Future<void>.delayed(const Duration(seconds: 3));
+    AppUpdateStatus? status;
+    try {
+      status = await AppDistributionService.instance.checkForUpdates();
+    } catch (_) {
+      // Keep startup usable if version lookup fails.
+    }
+    await wait;
+    if (!mounted || _navigated) return;
+
+    if (status?.updateRequired ?? false) {
+      _navigated = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => UpdateRequiredScreen(status: status!),
+        ),
+      );
+      return;
+    }
+
+    _navigated = true;
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => AuthGate()));
   }
 
   @override

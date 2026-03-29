@@ -98,11 +98,7 @@ class AuthGate extends StatelessWidget {
             }
 
             return FutureBuilder<bool>(
-              future: isAdmin(
-                user.uid,
-                email: user.email,
-                userData: userData,
-              ),
+              future: isAdmin(user.uid, email: user.email, userData: userData),
               builder: (context, adminSnapshot) {
                 if (adminSnapshot.connectionState == ConnectionState.waiting) {
                   return const Scaffold(

@@ -12,6 +12,7 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _auth = AuthService();
+  final _distribution = AppDistributionService.instance;
 
   final _email = TextEditingController();
   final _confirmEmail = TextEditingController();
@@ -20,6 +21,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isSignup = false;
   bool _loading = false;
+  bool _openingDistributionLink = false;
   bool _hidePass = true;
   String? _error;
   Timer? _errorTimer;
@@ -32,6 +34,28 @@ class _AuthScreenState extends State<AuthScreen> {
     _password.dispose();
     _username.dispose();
     super.dispose();
+  }
+
+  Future<void> _openDistributionLink(
+    Future<bool> Function(AppDistributionConfig config) action,
+  ) async {
+    if (_openingDistributionLink) return;
+    setState(() => _openingDistributionLink = true);
+    try {
+      final config = await _distribution.fetchConfig();
+      final opened = await action(config);
+      if (!opened && mounted) {
+        _showTimedError('Distribution link is not configured yet.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showTimedError('Distribution link is not configured yet.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _openingDistributionLink = false);
+      }
+    }
   }
 
   void _showTimedError(String message) {
@@ -308,6 +332,51 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 16),
+
+              FutureBuilder<AppDistributionConfig>(
+                future: _distribution.fetchConfig(),
+                builder: (context, snapshot) {
+                  final config = snapshot.data;
+                  final buttons = <Widget>[
+                    if (config != null && config.androidApkUrl.isNotEmpty)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: TextButton.icon(
+                          onPressed: _openingDistributionLink
+                              ? null
+                              : () => _openDistributionLink(
+                                  _distribution.openAndroidApk,
+                                ),
+                          icon: const Icon(Icons.download),
+                          label: const Text('Download Android APK'),
+                        ),
+                      ),
+                    if (config != null && config.websiteUrl.isNotEmpty)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: TextButton.icon(
+                          onPressed: _openingDistributionLink
+                              ? null
+                              : () => _openDistributionLink(
+                                  _distribution.openWebsite,
+                                ),
+                          icon: const Icon(Icons.public),
+                          label: const Text('Open Website'),
+                        ),
+                      ),
+                  ];
+
+                  if (buttons.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Column(children: buttons);
+                },
               ),
 
               const SizedBox(height: 30),

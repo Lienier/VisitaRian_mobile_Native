@@ -8,6 +8,7 @@ abstract final class AppRoutes {
   static const auth = '/auth';
   static const onboarding = '/onboarding';
   static const tourSelection = '/tour-selection';
+  static const updateRequired = '/update-required';
 
   static Map<String, WidgetBuilder> get map => {
     splash: (_) => const SplashScreen(),
@@ -15,5 +16,8 @@ abstract final class AppRoutes {
     auth: (_) => const AuthScreen(),
     onboarding: (_) => const OnboardingScreen(),
     tourSelection: (_) => const TourSelectionScreen(),
+    updateRequired: (_) => throw UnimplementedError(
+      'Use MaterialPageRoute for UpdateRequiredScreen because it needs arguments.',
+    ),
   };
 }

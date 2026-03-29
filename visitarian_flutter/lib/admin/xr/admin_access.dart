@@ -27,7 +27,9 @@ Stream<bool> isAdminStream(String uid, {String? email}) {
       .collection('users')
       .doc(uid)
       .snapshots()
-      .asyncMap((userDoc) => isAdmin(uid, email: email, userData: userDoc.data()));
+      .asyncMap(
+        (userDoc) => isAdmin(uid, email: email, userData: userDoc.data()),
+      );
 }
 
 Future<bool> isAdmin(
@@ -55,8 +57,11 @@ Future<bool> isAdmin(
     }
 
     try {
-      final byUid =
-          await db.collection('admins').where('uid', isEqualTo: uid).limit(1).get();
+      final byUid = await db
+          .collection('admins')
+          .where('uid', isEqualTo: uid)
+          .limit(1)
+          .get();
       if (byUid.docs.isNotEmpty) {
         return true;
       }

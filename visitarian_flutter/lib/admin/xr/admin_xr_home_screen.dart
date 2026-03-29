@@ -194,6 +194,161 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
     imageUrlController.dispose();
   }
 
+  Future<void> _showDistributionDialog() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final current = await AppDistributionService.instance.fetchConfig();
+      if (!mounted) return;
+
+      final formKey = GlobalKey<FormState>();
+      final websiteController = TextEditingController(text: current.websiteUrl);
+      final apkController = TextEditingController(text: current.androidApkUrl);
+      final latestController = TextEditingController(
+        text: current.latestVersion,
+      );
+      final minimumController = TextEditingController(
+        text: current.minSupportedVersion,
+      );
+      final notesController = TextEditingController(text: current.releaseNotes);
+      var forceUpdate = current.forceUpdate;
+      var saving = false;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: const Text('Mobile Distribution'),
+                content: SizedBox(
+                  width: 560,
+                  child: Form(
+                    key: formKey,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextFormField(
+                            controller: websiteController,
+                            decoration: const InputDecoration(
+                              labelText: 'Website URL',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: apkController,
+                            decoration: const InputDecoration(
+                              labelText: 'Android APK URL',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: latestController,
+                            decoration: const InputDecoration(
+                              labelText: 'Latest Version',
+                              hintText: '1.0.1',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: minimumController,
+                            decoration: const InputDecoration(
+                              labelText: 'Minimum Supported Version',
+                              hintText: '1.0.0',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Force update'),
+                            subtitle: const Text(
+                              'Block older app versions until users update.',
+                            ),
+                            value: forceUpdate,
+                            onChanged: (value) {
+                              setDialogState(() => forceUpdate = value);
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: notesController,
+                            minLines: 3,
+                            maxLines: 5,
+                            decoration: const InputDecoration(
+                              labelText: 'Release Notes',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: saving
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            if (!(formKey.currentState?.validate() ?? true)) {
+                              return;
+                            }
+                            setDialogState(() => saving = true);
+                            try {
+                              await AppDistributionService.instance.saveConfig(
+                                AppDistributionConfig(
+                                  websiteUrl: websiteController.text.trim(),
+                                  androidApkUrl: apkController.text.trim(),
+                                  latestVersion: latestController.text.trim(),
+                                  minSupportedVersion: minimumController.text
+                                      .trim(),
+                                  forceUpdate: forceUpdate,
+                                  releaseNotes: notesController.text.trim(),
+                                ),
+                              );
+                              if (!dialogContext.mounted) return;
+                              Navigator.of(dialogContext).pop();
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Distribution settings saved.'),
+                                ),
+                              );
+                            } catch (e) {
+                              setDialogState(() => saving = false);
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to save distribution settings: $e',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                    child: Text(saving ? 'Saving...' : 'Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      websiteController.dispose();
+      apkController.dispose();
+      latestController.dispose();
+      minimumController.dispose();
+      notesController.dispose();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to load distribution settings: $e')),
+      );
+    }
+  }
+
   Future<void> _logout() async {
     if (_isSigningOut) return;
 
@@ -261,6 +416,14 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
               onPressed: _isCreatingPlace ? null : _showAddPlaceDialog,
               icon: const Icon(Icons.add_location_alt),
               label: const Text('Add Place'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: OutlinedButton.icon(
+              onPressed: _showDistributionDialog,
+              icon: const Icon(Icons.system_update_alt),
+              label: const Text('Distribution'),
             ),
           ),
           IconButton(
