@@ -4,11 +4,24 @@ A new Flutter project.
 
 ## Environment setup
 
-Sensitive app config now lives in `.env`, which is ignored by git.
+Keep local config in `.env`, but do not bundle it as a Flutter asset. For web builds, values should be injected at build time with `--dart-define-from-file`.
 
 1. Copy `.env.example` to `.env`.
-2. Fill in the required Firebase, ORS, and TomTom values.
+2. Fill in the required Firebase, ORS, TomTom, and Google client values.
 3. Run `flutter pub get`.
+4. Start the app with compile-time defines:
+
+```powershell
+flutter run --dart-define-from-file=.env
+```
+
+5. Build the web app the same way:
+
+```powershell
+flutter build web --dart-define-from-file=.env
+```
+
+If a value is needed in a browser client, treat it as public and lock it down with provider-side restrictions. Do not place server-only secrets in this app.
 
 ## Getting Started
 

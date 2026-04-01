@@ -208,7 +208,7 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
     if (_orsApiKey.isEmpty) {
       setState(() {
         _routeError =
-            'Missing ORS API key. Add ORS_API_KEY to .env or pass --dart-define.';
+            'Missing ORS API key. Pass ORS_API_KEY via --dart-define or --dart-define-from-file.';
       });
       return;
     }
@@ -328,7 +328,7 @@ class _AdminMapTestScreenState extends State<AdminMapTestScreen> {
     if (_tomTomApiKey.isEmpty) {
       setState(() {
         _trafficError =
-            'Missing TomTom API key. Add TOMTOM_API_KEY to .env or pass --dart-define.';
+            'Missing TomTom API key. Pass TOMTOM_API_KEY via --dart-define or --dart-define-from-file.';
       });
       return;
     }

@@ -10,7 +10,7 @@ class AppEnv {
     try {
       await dotenv.load(fileName: '.env');
     } catch (_) {
-      // Allow builds that provide values only through --dart-define.
+      // Prefer compile-time defines so web builds do not ship a public .env file.
     }
   }
 
@@ -171,7 +171,7 @@ class AppEnv {
     final value = _optional(defineValue, key);
     if (value.isEmpty) {
       throw StateError(
-        'Missing $key. Add it to .env or pass it through --dart-define.',
+        'Missing $key. Pass it through --dart-define or --dart-define-from-file.',
       );
     }
     return value;

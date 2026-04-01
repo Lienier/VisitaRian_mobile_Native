@@ -331,7 +331,7 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     if (_orsApiKey.isEmpty) {
       setState(() {
         _routeError =
-            'Missing ORS API key. Add ORS_API_KEY to .env or pass --dart-define.';
+            'Missing ORS API key. Pass ORS_API_KEY via --dart-define or --dart-define-from-file.';
       });
       return;
     }
