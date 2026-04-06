@@ -14,7 +14,6 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _auth = AuthService();
   final _distribution = AppDistributionService.instance;
-  final String? _pendingInviteToken = AccessInviteService.currentInviteToken();
 
   final _email = TextEditingController();
   final _confirmEmail = TextEditingController();
@@ -27,14 +26,6 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _hidePass = true;
   String? _error;
   Timer? _errorTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_pendingInviteToken != null) {
-      _isSignup = true;
-    }
-  }
 
   @override
   void dispose() {
@@ -200,26 +191,6 @@ class _AuthScreenState extends State<AuthScreen> {
               ],
               const SizedBox(height: 30),
 
-              if (_pendingInviteToken != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEAF7F0),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFA7D1B6)),
-                  ),
-                  child: const Text(
-                    'A managed-access invite was detected. Sign in with the invited email, or create that account first, then finish activation on the next screen.',
-                    style: TextStyle(
-                      color: Color(0xFF19573F),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
               // Logo and tagline
               Column(
                 children: [
@@ -249,11 +220,7 @@ class _AuthScreenState extends State<AuthScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  _pendingInviteToken != null
-                      ? (_isSignup
-                            ? "Create invited account"
-                            : "Sign in to invited account")
-                      : (_isSignup ? "Sign up" : "Sign in"),
+                  _isSignup ? "Sign up" : "Sign in",
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,

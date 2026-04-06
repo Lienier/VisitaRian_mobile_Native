@@ -43,37 +43,3 @@ Run all automated manual-test cases in expanded mode (showing each test output):
 ```powershell
 ./scripts/run_manual_unit_tests.ps1
 ```
-
-## Managed admin onboarding
-
-Production admin and beneficiary onboarding now uses backend-managed one-time invites.
-
-### What changed
-
-- Super admin actions are handled by Firebase Functions in `functions/`.
-- Firestore and Storage rules now treat super-admin-only actions separately from normal admin content editing.
-- Invite redemption happens after the invited user signs in or creates an account with the invited email.
-
-### Deployment checklist
-
-1. Run `flutter pub get`.
-2. Install Functions dependencies:
-
-```powershell
-cd functions
-npm install
-```
-
-3. Deploy rules and functions:
-
-```powershell
-firebase deploy --only firestore:rules,storage,functions
-```
-
-4. Sign in with the designated bootstrap account `reineilarayat70@gmail.com`.
-5. Open the app profile page once and use `Initialize Super Admin`.
-6. Use the new `Super Admin` console inside the admin area to create one-time invites.
-
-### Optional server config
-
-If you need to change the bootstrap email later, set the Functions environment variable `SUPER_ADMIN_EMAILS` before deployment.

@@ -33,7 +33,6 @@ dependencies:
   cloud_firestore: ^4.15.0
   firebase_storage: ^11.6.0
   firebase_app_check: ^0.2.2+7
-  cloud_functions: ^4.7.6
   google_sign_in: ^6.2.1
   image_picker: ^1.0.0
   shared_preferences: ^2.3.2

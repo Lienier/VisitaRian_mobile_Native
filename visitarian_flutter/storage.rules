@@ -5,44 +5,26 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function hasClaim(name) {
-      return signedIn() && request.auth.token[name] == true;
-    }
-
-    function hasActiveAdminDoc() {
+    function isAdmin() {
+      // Admin membership comes from Firestore document existence:
+      // /admins/{uid}
       return signedIn() &&
-          exists(/databases/(default)/documents/admins/$(request.auth.uid)) &&
-          (
-            !(
-              get(
-                /databases/(default)/documents/admins/$(request.auth.uid)
-              ).data.status is string
-            ) ||
-            get(
-              /databases/(default)/documents/admins/$(request.auth.uid)
-            ).data.status.lower() == 'active'
-          );
+          exists(/databases/(default)/documents/admins/$(request.auth.uid));
     }
 
-    function isContentAdmin() {
-      return signedIn() &&
-          (
-            hasClaim('super_admin') ||
-            hasClaim('admin') ||
-            hasActiveAdminDoc()
-          );
-    }
-
+    // User profile images
     match /profiles/{userId}/{allPaths=**} {
-      allow read: if signedIn() && (request.auth.uid == userId || isContentAdmin());
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if signedIn() && request.auth.uid == userId;
     }
 
+    // XR panorama/media content
     match /tours/{tourId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isContentAdmin();
+      allow write: if isAdmin();
     }
 
+    // Deny everything else by default.
     match /{allPaths=**} {
       allow read, write: if false;
     }

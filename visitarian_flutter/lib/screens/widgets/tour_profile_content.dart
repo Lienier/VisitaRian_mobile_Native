@@ -9,7 +9,6 @@ class TourProfileContent extends StatelessWidget {
   final String photoUrl;
   final VoidCallback onEditProfile;
   final VoidCallback onLogout;
-  final List<Widget> extraSections;
 
   const TourProfileContent({
     super.key,
@@ -18,7 +17,6 @@ class TourProfileContent extends StatelessWidget {
     required this.photoUrl,
     required this.onEditProfile,
     required this.onLogout,
-    this.extraSections = const <Widget>[],
   });
 
   @override
@@ -165,8 +163,9 @@ class TourProfileContent extends StatelessWidget {
                               width: double.infinity,
                               child: OutlinedButton.icon(
                                 onPressed: () {
-                                  AppDistributionService.instance
-                                      .openAndroidApk(config);
+                                  AppDistributionService.instance.openAndroidApk(
+                                    config,
+                                  );
                                 },
                                 icon: const Icon(Icons.download),
                                 label: const Text('Download Android APK'),
@@ -180,10 +179,6 @@ class TourProfileContent extends StatelessWidget {
                   );
                 },
               ),
-              if (extraSections.isNotEmpty) ...[
-                ...extraSections,
-                SizedBox(height: verticalSpacing),
-              ],
               OutlinedButton(
                 onPressed: onLogout,
                 style: OutlinedButton.styleFrom(
