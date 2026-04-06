@@ -5,28 +5,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return signedIn() && (
-          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-          userRoleIsAdmin()
-      );
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
     }
 
-    function userRoleIsAdmin() {
-      let userDoc = get(
-        /databases/$(database)/documents/users/$(request.auth.uid)
-      );
-      let role = userDoc.data.role;
-      return userDoc.data.admin == true ||
-          userDoc.data.isAdmin == true ||
-          (
-            role is string &&
-            (
-              role.lower() == 'admin' ||
-              role.lower() == 'superadmin' ||
-              role.lower() == 'super_admin'
-            )
-          );
+    function hasClaim(name) {
+      return signedIn() && request.auth.token[name] == true;
     }
 
     function authEmail() {
@@ -35,46 +19,125 @@ service cloud.firestore {
           : '';
     }
 
-    // Admin membership documents.
-    match /admins/{userId} {
-      allow read: if signedIn() && (
-          request.auth.uid == userId ||
-          (
-            resource.data.uid is string &&
-            resource.data.uid == request.auth.uid
-          ) ||
-          (
-            resource.data.email is string &&
-            resource.data.email.lower() == authEmail()
-          ) ||
-          isAdmin()
-      );
-      allow create, update, delete: if isAdmin();
+    function adminDocPath() {
+      return /databases/$(database)/documents/admins/$(request.auth.uid);
     }
 
-    // Users can manage their own profile; block privilege-style fields.
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function adminDocExists() {
+      return signedIn() && exists(adminDocPath());
+    }
+
+    function adminDoc() {
+      return get(adminDocPath());
+    }
+
+    function userDocExists() {
+      return signedIn() && exists(userDocPath());
+    }
+
+    function userDoc() {
+      return get(userDocPath());
+    }
+
+    function adminDocRoleIsSuper() {
+      return adminDocExists() &&
+          adminDoc().data.role is string &&
+          (
+            adminDoc().data.role.lower() == 'super_admin' ||
+            adminDoc().data.role.lower() == 'superadmin'
+          );
+    }
+
+    function adminDocIsActive() {
+      return adminDocExists() &&
+          (
+            !(adminDoc().data.status is string) ||
+            adminDoc().data.status.lower() == 'active'
+          );
+    }
+
+    function userRoleIsLegacyAdmin() {
+      return userDocExists() &&
+          (
+            userDoc().data.admin == true ||
+            userDoc().data.isAdmin == true ||
+            (
+              userDoc().data.role is string &&
+              (
+                userDoc().data.role.lower() == 'admin' ||
+                userDoc().data.role.lower() == 'superadmin' ||
+                userDoc().data.role.lower() == 'super_admin'
+              )
+            )
+          );
+    }
+
+    function isSuperAdmin() {
+      return signedIn() &&
+          (
+            hasClaim('super_admin') ||
+            (adminDocRoleIsSuper() && adminDocIsActive())
+          );
+    }
+
+    function isContentAdmin() {
+      return signedIn() &&
+          (
+            isSuperAdmin() ||
+            hasClaim('admin') ||
+            adminDocIsActive() ||
+            userRoleIsLegacyAdmin()
+          );
+    }
+
+    match /admins/{userId} {
+      allow read: if isSelf(userId) || isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /adminInvites/{inviteId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /accessGrants/{userId} {
+      allow read: if isSelf(userId) || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /users/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow create, update: if signedIn() &&
-          request.auth.uid == userId &&
+      allow read: if isSelf(userId) || isContentAdmin();
+      allow create, update: if isSelf(userId) &&
           !request.resource.data.keys().hasAny([
             'role',
             'roles',
             'admin',
             'isAdmin',
             'claims',
-            'permissions'
+            'permissions',
+            'subscriptionStatus',
+            'subscriptionLabel',
+            'subscriptionEndsAt',
+            'organizationName',
+            'managedByUid',
+            'managedByEmail'
           ]);
-      allow delete: if signedIn() && request.auth.uid == userId;
+      allow delete: if isSelf(userId);
     }
 
-    // Publicly visible place catalog; admin-managed content.
     match /places/{placeId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isContentAdmin();
     }
 
-    // Public reads; constrain count mutations to +1/-1 style updates.
     match /favoriteStats/{placeId} {
       allow read: if true;
 
@@ -94,28 +157,24 @@ service cloud.firestore {
             request.resource.data.count == resource.data.count - 1
           );
 
-      // Prevent arbitrary counter resets/deletes from client devices.
       allow delete: if false;
     }
 
-    // XR data is public read, admin write.
     match /tours/{tourId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isContentAdmin();
 
       match /nodes/{nodeId} {
         allow read: if true;
-        allow create, update, delete: if isAdmin();
+        allow create, update, delete: if isContentAdmin();
       }
     }
 
-    // App-managed UI content.
     match /appConfig/{docId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isContentAdmin();
     }
 
-    // Deny everything else by default.
     match /{document=**} {
       allow read, write: if false;
     }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:visitarian_flutter/app/app_routes.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 import 'package:visitarian_flutter/screens/place_detail_screen.dart';
 import 'package:visitarian_flutter/screens/profile_setup_screen.dart';
@@ -30,8 +31,10 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
   static const _homeCacheVersion = 'v1';
   Timer? _searchDebounce;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _profileStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _accessGrantStream;
   bool _homeLoading = true;
   bool _homeRefreshing = false;
+  bool _bootstrappingSuperAdmin = false;
   String? _homeError;
   List<_CachedPlace> _cachedPlaces = [];
   List<_CachedPlace> _cachedPopularPlaces = [];
@@ -45,6 +48,10 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     if (user != null) {
       _profileStream = FirebaseFirestore.instance
           .collection('users')
+          .doc(user.uid)
+          .snapshots();
+      _accessGrantStream = FirebaseFirestore.instance
+          .collection('accessGrants')
           .doc(user.uid)
           .snapshots();
       _loadHomeCacheThenRefresh(user.uid);
@@ -446,6 +453,31 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
     }
   }
 
+  Future<void> _bootstrapSuperAdmin() async {
+    if (_bootstrappingSuperAdmin) return;
+
+    setState(() => _bootstrappingSuperAdmin = true);
+    try {
+      await AccessInviteService.instance.bootstrapSuperAdmin();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Super admin access initialized.')),
+      );
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AppRoutes.authGate, (_) => false);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AccessInviteService.describeError(error))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _bootstrappingSuperAdmin = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -837,27 +869,114 @@ class _TourSelectionScreenState extends State<TourSelectionScreen> {
         child: Center(
           child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: _profileStream,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+            builder: (context, profileSnapshot) {
+              if (profileSnapshot.connectionState == ConnectionState.waiting) {
                 return const CircularProgressIndicator();
               }
 
-              final userData = snapshot.data?.data();
+              final userData = profileSnapshot.data?.data();
               final username = (userData?['username'] ?? 'User') as String;
               final photoUrl = (userData?['photoUrl'] ?? '') as String;
 
-              return TourProfileContent(
-                username: username,
-                email: user?.email ?? '',
-                photoUrl: photoUrl,
-                onEditProfile: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ProfileSetupScreen(),
-                    ),
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: _accessGrantStream,
+                builder: (context, accessSnapshot) {
+                  final accessData = accessSnapshot.data?.data();
+                  final role = (accessData?['role'] ?? '').toString();
+                  final organizationName =
+                      (accessData?['organizationName'] ?? '').toString();
+                  final subscriptionStatus =
+                      (accessData?['subscriptionStatus'] ?? '').toString();
+                  final extraSections = <Widget>[
+                    if (role.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Managed Access',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            Text('Role: $role'),
+                            Text(
+                              'Organization: ${organizationName.isEmpty ? 'Not specified' : organizationName}',
+                            ),
+                            Text(
+                              'Subscription: ${subscriptionStatus.isEmpty ? 'Unknown' : subscriptionStatus}',
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (role.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Designated Super Admin Setup',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Use this only for the one designated production super admin account. The backend will reject every other account.',
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _bootstrappingSuperAdmin
+                                  ? null
+                                  : _bootstrapSuperAdmin,
+                              icon: _bootstrappingSuperAdmin
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.security),
+                              label: Text(
+                                _bootstrappingSuperAdmin
+                                    ? 'Initializing...'
+                                    : 'Initialize Super Admin',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ];
+
+                  return TourProfileContent(
+                    username: username,
+                    email: user?.email ?? '',
+                    photoUrl: photoUrl,
+                    onEditProfile: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProfileSetupScreen(),
+                        ),
+                      );
+                    },
+                    onLogout: _logout,
+                    extraSections: extraSections,
                   );
                 },
-                onLogout: _logout,
               );
             },
           ),

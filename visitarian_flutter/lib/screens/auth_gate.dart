@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 import 'package:visitarian_flutter/features/admin_xr/admin_xr.dart';
+import 'package:visitarian_flutter/screens/access_invite_screen.dart';
 import 'package:visitarian_flutter/screens/auth_screen.dart';
 import 'package:visitarian_flutter/screens/onboarding_screen.dart';
 import 'package:visitarian_flutter/screens/tour_selection_screen.dart';
@@ -89,34 +90,68 @@ class AuthGate extends StatelessWidget {
               return const AuthScreen();
             }
 
-            if (!hasSeenOnboarding) {
-              return const OnboardingScreen();
-            }
-
-            if (userDataHasAdminRole(userData)) {
-              return const AdminXrHomeScreen();
-            }
-
-            return FutureBuilder<bool>(
-              future: isAdmin(user.uid, email: user.email, userData: userData),
-              builder: (context, adminSnapshot) {
-                if (adminSnapshot.connectionState == ConnectionState.waiting) {
+            return FutureBuilder<AccessSnapshot>(
+              future: getAccessSnapshot(
+                uid: user.uid,
+                email: user.email,
+                userData: userData,
+              ),
+              builder: (context, accessSnapshot) {
+                if (accessSnapshot.connectionState == ConnectionState.waiting) {
                   return const Scaffold(
                     body: Center(child: CircularProgressIndicator()),
                   );
                 }
-                if (adminSnapshot.hasError) {
+                if (accessSnapshot.hasError) {
                   return _AuthGateErrorScreen(
-                    message: 'Admin access check error: ${adminSnapshot.error}',
+                    message: 'Access check error: ${accessSnapshot.error}',
                   );
                 }
 
-                final hasAdminAccess = adminSnapshot.data ?? false;
-                if (hasAdminAccess) {
-                  return const AdminXrHomeScreen();
+                final access =
+                    accessSnapshot.data ?? const AccessSnapshot.none();
+                final pendingInviteToken =
+                    AccessInviteService.currentInviteToken();
+                if (pendingInviteToken != null && !access.hasManagedRole) {
+                  return AccessInviteScreen(inviteToken: pendingInviteToken);
                 }
 
-                return const TourSelectionScreen();
+                if (!hasSeenOnboarding) {
+                  return const OnboardingScreen();
+                }
+
+                if (access.isAdmin) {
+                  return AdminXrHomeScreen(isSuperAdmin: access.isSuperAdmin);
+                }
+
+                return FutureBuilder<bool>(
+                  future: isAdmin(
+                    user.uid,
+                    email: user.email,
+                    userData: userData,
+                  ),
+                  builder: (context, adminSnapshot) {
+                    if (adminSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Scaffold(
+                        body: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (adminSnapshot.hasError) {
+                      return _AuthGateErrorScreen(
+                        message:
+                            'Admin access check error: ${adminSnapshot.error}',
+                      );
+                    }
+
+                    final hasAdminAccess = adminSnapshot.data ?? false;
+                    if (hasAdminAccess) {
+                      return const AdminXrHomeScreen();
+                    }
+
+                    return const TourSelectionScreen();
+                  },
+                );
               },
             );
           },

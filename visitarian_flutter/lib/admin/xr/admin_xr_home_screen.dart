@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:visitarian_flutter/admin/xr/admin_map_test_screen.dart';
+import 'package:visitarian_flutter/admin/xr/super_admin_console_screen.dart';
 import 'package:visitarian_flutter/admin/xr/tour_nodes_screen.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 
 class AdminXrHomeScreen extends StatefulWidget {
-  const AdminXrHomeScreen({super.key});
+  final bool isSuperAdmin;
+
+  const AdminXrHomeScreen({super.key, this.isSuperAdmin = false});
 
   @override
   State<AdminXrHomeScreen> createState() => _AdminXrHomeScreenState();
@@ -396,8 +399,25 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin XR Editor'),
+        title: Text(
+          widget.isSuperAdmin ? 'Super Admin XR Console' : 'Admin XR Editor',
+        ),
         actions: [
+          if (widget.isSuperAdmin)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SuperAdminConsoleScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.admin_panel_settings),
+                label: const Text('Super Admin'),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: OutlinedButton.icon(
