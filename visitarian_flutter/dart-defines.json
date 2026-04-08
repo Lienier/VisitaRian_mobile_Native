@@ -1,0 +1,13 @@
+{
+  "ORS_API_KEY": "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImRmZWRmYTQ1MWQ4NzRlNjhhMjY1NzdmN2I0OWUwNWI5IiwiaCI6Im11cm11cjY0In0=",
+  "TOMTOM_API_KEY": "IpaCHRkQ82fuN7KDKciXG1JwppDL4DlA",
+  "GOOGLE_WEB_CLIENT_ID": "112732840406-52hjfkukqpuumkbq8pqvnqr5rnd772aa.apps.googleusercontent.com",
+  "GOOGLE_IOS_CLIENT_ID": "112732840406-dlnh8lajne9pcr8dsl0a3nu4oe09g7qr.apps.googleusercontent.com",
+  "FIREBASE_PROJECT_ID": "my-visitarian-project-287ab",
+  "FIREBASE_MESSAGING_SENDER_ID": "112732840406",
+  "FIREBASE_AUTH_DOMAIN": "my-visitarian-project-287ab.firebaseapp.com",
+  "FIREBASE_STORAGE_BUCKET": "my-visitarian-project-287ab.firebasestorage.app",
+  "FIREBASE_WEB_API_KEY": "AIzaSyDHr0vQnnm4phqgVCO2yBDK2aSegiaYeno",
+  "FIREBASE_WEB_APP_ID": "1:112732840406:web:ee4dd25314ed4894f10477",
+  "FIREBASE_WEB_MEASUREMENT_ID": "G-WGB2J8Z97V"
+}
