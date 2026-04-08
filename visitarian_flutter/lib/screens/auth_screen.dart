@@ -136,6 +136,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       if (error.code == 'google-sign-in-misconfigured' ||
           error.code == 'google-sign-in-failed' ||
+          error.code == 'google-sign-in-cancelled' ||
           error.code == 'google-sign-in-unsupported-platform') {
         return error.message ??
             'Google sign-in is not fully configured for this app yet.';
@@ -337,74 +338,73 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 16),
 
-              FutureBuilder<AppDistributionConfig>(
-                future: _distribution.fetchConfig(),
-                builder: (context, snapshot) {
-                  final config = snapshot.data;
-                  final buttons = <Widget>[
-                    if (config != null && config.androidApkUrl.isNotEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade300),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
+              if (kIsWeb)
+                FutureBuilder<AppDistributionConfig>(
+                  future: _distribution.fetchConfig(),
+                  builder: (context, snapshot) {
+                    final config = snapshot.data;
+                    final buttons = <Widget>[
+                      if (config != null && config.androidApkUrl.isNotEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade300),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Want the Android app?',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: darkText,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Download the APK for the full mobile VR experience.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: TextButton.icon(
+                                  onPressed: _openingDistributionLink
+                                      ? null
+                                      : () => _openDistributionLink(
+                                          _distribution.openAndroidApk,
+                                        ),
+                                  icon: const Icon(Icons.download),
+                                  label: const Text('Download Android APK'),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Want the Android app?',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: darkText,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              kIsWeb
-                                  ? 'Download the APK for the full mobile VR experience.'
-                                  : 'Download or share the latest Android installer from here.',
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 48,
-                              child: TextButton.icon(
-                                onPressed: _openingDistributionLink
-                                    ? null
-                                    : () => _openDistributionLink(
-                                        _distribution.openAndroidApk,
-                                      ),
-                                icon: const Icon(Icons.download),
-                                label: const Text('Download Android APK'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ];
+                    ];
 
-                  if (buttons.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
+                    if (buttons.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
 
-                  return Column(children: buttons);
-                },
-              ),
+                    return Column(children: buttons);
+                  },
+                ),
 
               const SizedBox(height: 30),
 

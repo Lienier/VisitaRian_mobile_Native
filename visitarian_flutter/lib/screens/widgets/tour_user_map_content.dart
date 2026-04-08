@@ -58,6 +58,7 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
   double _routeDistanceMeters = 0;
   double _routeDurationSeconds = 0;
   double _incidentDelaySeconds = 0;
+  int _routeProgressIndex = 0;
 
   @override
   void initState() {
@@ -411,6 +412,7 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
       if (!mounted) return;
       setState(() {
         _routePoints = points;
+        _routeProgressIndex = 0;
         _routeDistanceMeters = distanceMeters;
         _routeDurationSeconds = durationSeconds;
         _incidentDelaySeconds = incidentDelaySeconds;
@@ -575,20 +577,37 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
   double _estimateRemainingRouteMeters(LatLng current) {
     if (_routePoints.isEmpty) return 0;
 
-    var nearestIndex = 0;
+    var nearestIndex =
+        _routeProgressIndex.clamp(0, _routePoints.length - 1).toInt();
     var nearestMeters = double.infinity;
-    for (var i = 0; i < _routePoints.length; i++) {
+    for (var i = nearestIndex; i < _routePoints.length; i++) {
       final meters = _distance(current, _routePoints[i]);
       if (meters < nearestMeters) {
         nearestMeters = meters;
         nearestIndex = i;
       }
     }
+    _routeProgressIndex = nearestIndex;
 
     var remaining = nearestMeters;
     for (var i = nearestIndex; i < _routePoints.length - 1; i++) {
       remaining += _distance(_routePoints[i], _routePoints[i + 1]);
     }
+    return remaining;
+  }
+
+  List<LatLng> _visibleRoutePoints() {
+    if (_routePoints.isEmpty) return const [];
+    final start = _routeProgressIndex.clamp(0, _routePoints.length - 1).toInt();
+    final remaining = _routePoints.sublist(start);
+    final current = _currentLocation;
+
+    if (_navigating && current != null && remaining.isNotEmpty) {
+      // Start the rendered route from the live position so completed segments
+      // are not left behind on the map.
+      return <LatLng>[current, ...remaining];
+    }
+
     return remaining;
   }
 
@@ -606,6 +625,7 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
       setState(() {
         _navigating = false;
         _routePoints = const [];
+        _routeProgressIndex = 0;
         _destination = null;
         _routeSummary = null;
         _routeDistanceMeters = 0;
@@ -646,6 +666,7 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     setState(() {
       _destination = null;
       _routePoints = const [];
+      _routeProgressIndex = 0;
       _routeSummary = null;
       _routeError = null;
       _navigating = false;
@@ -663,6 +684,7 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
     final errorColor = Theme.of(context).colorScheme.error;
     final user = _currentLocation;
     final destination = _destination;
+    final visibleRoutePoints = _visibleRoutePoints();
 
     final markers = <Marker>[
       if (user != null)
@@ -744,11 +766,11 @@ class _TourUserMapContentState extends State<TourUserMapContent> {
                   ),
                   if (_boundaryPolylines.isNotEmpty)
                     PolylineLayer(polylines: _boundaryPolylines),
-                  if (_routePoints.isNotEmpty)
+                  if (visibleRoutePoints.isNotEmpty)
                     PolylineLayer(
                       polylines: [
                         Polyline(
-                          points: _routePoints,
+                          points: visibleRoutePoints,
                           color: Colors.blue,
                           strokeWidth: 5,
                         ),

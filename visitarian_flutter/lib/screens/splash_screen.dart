@@ -29,7 +29,9 @@ class _SplashScreenState extends State<SplashScreen> {
     final wait = Future<void>.delayed(const Duration(seconds: 3));
     AppUpdateStatus? status;
     try {
-      status = await AppDistributionService.instance.checkForUpdates();
+      status = await AppDistributionService.instance
+          .checkForUpdates()
+          .timeout(const Duration(seconds: 6));
     } catch (_) {
       // Keep startup usable if version lookup fails.
     }

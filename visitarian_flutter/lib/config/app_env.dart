@@ -22,12 +22,12 @@ class AppEnv {
     'TOMTOM_API_KEY',
   );
 
-  static String get googleWebClientId => _required(
+  static String get googleWebClientId => _optional(
     const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID'),
     'GOOGLE_WEB_CLIENT_ID',
   );
 
-  static String get googleIosClientId => _required(
+  static String get googleIosClientId => _optional(
     const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID'),
     'GOOGLE_IOS_CLIENT_ID',
   );
