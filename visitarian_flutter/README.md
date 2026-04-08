@@ -21,6 +21,22 @@ flutter run --dart-define-from-file=.env
 flutter build web --dart-define-from-file=.env
 ```
 
+## Vercel deployment
+
+This repo's deployable site is the generated `build/web` output, not the Flutter source tree itself. Vercel will return a 404 if it is pointed at the repo root or `visitarian_flutter/` without deploying the built web folder.
+
+Build and deploy with:
+
+```powershell
+./scripts/deploy_web_to_vercel.ps1
+```
+
+The script:
+
+- builds the Flutter web app with `--dart-define-from-file`
+- copies the tracked `vercel.json` into `build/web`
+- deploys `build/web` to Vercel production so SPA routes rewrite to `index.html`
+
 If a value is needed in a browser client, treat it as public and lock it down with provider-side restrictions. Do not place server-only secrets in this app.
 
 ## Getting Started
