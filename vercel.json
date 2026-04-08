@@ -1,7 +1,6 @@
 {
-  "buildCommand": "cd visitarian_flutter && flutter build web --release --base-href /",
+  "buildCommand": "bash visitarian_flutter/scripts/vercel-build.sh",
   "outputDirectory": "visitarian_flutter/build/web",
-  "installCommand": "if ! command -v flutter &> /dev/null; then git clone https://github.com/flutter/flutter.git -b stable --depth 1 && export PATH=\"$PATH:`pwd`/flutter/bin\"; fi && cd visitarian_flutter && flutter pub get",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [
