@@ -21,39 +21,6 @@ flutter run --dart-define-from-file=.env
 flutter build web --dart-define-from-file=.env
 ```
 
-## Fix deployed 404s and publish latest APK
-
-This project includes `web/vercel.json` for Vercel SPA routing:
-
-- Existing files are served first (`/assets/*`, `/downloads/*.apk`, etc.).
-- Missing app routes fall back to `/index.html` (prevents route 404s).
-- Missing files inside `/downloads/*` stay a real 404 (so broken APK links are obvious).
-
-Use this release flow:
-
-1. Build Android APK:
-
-```powershell
-flutter build apk --release --split-per-abi --dart-define-from-file=.env
-```
-
-2. Copy the latest APK to the deployed web download path:
-
-```powershell
-./scripts/publish_android_apk.ps1
-```
-
-3. Build web (includes `web/downloads/app-arm64-v8a-release.apk`):
-
-```powershell
-flutter build web --release --dart-define-from-file=.env
-```
-
-4. Deploy `build/web` to Vercel.
-5. In the admin panel (`Distribution`), set:
-   - `androidApkUrl`: `https://www.visitarian.app/downloads/app-arm64-v8a-release.apk`
-   - `latestVersion` and `minSupportedVersion` to match the new app release.
-
 If a value is needed in a browser client, treat it as public and lock it down with provider-side restrictions. Do not place server-only secrets in this app.
 
 ## Getting Started

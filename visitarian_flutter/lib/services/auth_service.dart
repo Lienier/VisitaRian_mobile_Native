@@ -2,14 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
-import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:visitarian_flutter/config/app_env.dart';
 
 class AuthService {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
-  GoogleSignIn? _googleSignIn;
+  late final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: kIsWeb
+        ? AppEnv.googleWebClientId
+        : (defaultTargetPlatform == TargetPlatform.iOS
+              ? AppEnv.googleIosClientId
+              : null),
+    serverClientId: kIsWeb ? null : AppEnv.googleWebClientId,
+    scopes: const <String>['email'],
+  );
 
   Stream<User?> authStateChanges() => _auth.userChanges();
 
@@ -102,16 +109,9 @@ class AuthService {
     }
 
     GoogleSignInAccount? googleUser;
-    final googleSignIn = _getGoogleSignIn();
     try {
-      await googleSignIn.signOut();
-      googleUser = await googleSignIn.signIn();
-    } on PlatformException catch (e) {
-      throw FirebaseAuthException(
-        code: 'google-sign-in-failed',
-        message:
-            'Google sign-in could not start (${e.code}). Check the Firebase and Google app setup.',
-      );
+      await _googleSignIn.signOut();
+      googleUser = await _googleSignIn.signIn();
     } catch (_) {
       throw FirebaseAuthException(
         code: 'google-sign-in-failed',
@@ -119,28 +119,20 @@ class AuthService {
             'Google sign-in could not start. Check the Firebase and Google app setup.',
       );
     }
-    if (googleUser == null) {
-      throw FirebaseAuthException(
-        code: 'google-sign-in-cancelled',
-        message: 'Google sign-in was cancelled.',
-      );
-    }
+    if (googleUser == null) return null;
 
     final googleAuth = await googleUser.authentication;
     final idToken = googleAuth.idToken;
-    final accessToken = googleAuth.accessToken;
-    final hasIdToken = idToken != null && idToken.isNotEmpty;
-    final hasAccessToken = accessToken != null && accessToken.isNotEmpty;
-    if (!hasIdToken && !hasAccessToken) {
+    if (idToken == null || idToken.isEmpty) {
       throw FirebaseAuthException(
         code: 'google-sign-in-misconfigured',
         message:
-            'Google sign-in is missing tokens. Check the OAuth client IDs and platform configuration.',
+            'Google sign-in is missing an ID token. Check the OAuth client IDs and platform configuration.',
       );
     }
 
     final credential = GoogleAuthProvider.credential(
-      accessToken: accessToken,
+      accessToken: googleAuth.accessToken,
       idToken: idToken,
     );
 
@@ -270,35 +262,10 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      if (_googleSignIn != null) {
-        await _googleSignIn!.signOut();
-      }
-    } catch (_) {
+      await _googleSignIn.signOut();
+    } catch (e) {
       // Continue even if Google sign out fails.
     }
     await _auth.signOut();
-  }
-
-  GoogleSignIn _getGoogleSignIn() {
-    return _googleSignIn ??= _buildGoogleSignIn();
-  }
-
-  GoogleSignIn _buildGoogleSignIn() {
-    final webClientId = _orNull(AppEnv.googleWebClientId);
-    final iosClientId = _orNull(AppEnv.googleIosClientId);
-
-    return GoogleSignIn(
-      clientId: defaultTargetPlatform == TargetPlatform.iOS ? iosClientId : null,
-      // On Android, passing the web client ID (when available) helps ensure
-      // an ID token is returned for Firebase auth. If missing, plugin defaults
-      // to native config from google-services.json.
-      serverClientId: webClientId,
-      scopes: const <String>['email'],
-    );
-  }
-
-  String? _orNull(String value) {
-    final normalized = value.trim();
-    return normalized.isEmpty ? null : normalized;
   }
 }

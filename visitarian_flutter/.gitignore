@@ -31,7 +31,6 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
-!/build/web
 /coverage/
 
 # Symbolication related
@@ -55,4 +54,3 @@ android/app/*.keystore
 ios/Runner/GoogleService-Info.plist
 
 # Local app API keys
-web/downloads/*.apk

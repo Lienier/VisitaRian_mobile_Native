@@ -22,14 +22,6 @@
           }
         },
         {
-          "client_id": "112732840406-sj8rinh507bn73f0m9vagn4b43bcbhl9.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "app.visitarian.mobile",
-            "certificate_hash": "56e2098811d7aaa79cca6b3e4f6102973d3161eb"
-          }
-        },
-        {
           "client_id": "112732840406-52hjfkukqpuumkbq8pqvnqr5rnd772aa.apps.googleusercontent.com",
           "client_type": 3
         }
