@@ -1,0 +1,10 @@
+visitarian_flutter/android
+visitarian_flutter/ios
+visitarian_flutter/linux
+visitarian_flutter/macos
+visitarian_flutter/windows
+visitarian_flutter/.dart_tool
+visitarian_flutter/test
+visitarian_flutter/scripts
+*.log
+*.apk
