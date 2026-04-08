@@ -54,3 +54,4 @@ android/app/*.keystore
 ios/Runner/GoogleService-Info.plist
 
 # Local app API keys
+web/downloads/*.apk
