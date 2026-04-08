@@ -26,12 +26,10 @@ class AppEnv {
   static const String _defaultFirebaseWebMeasurementId = 'G-WGB2J8Z97V';
 
   static Future<void> load() async {
-    if (kIsWeb) {
-      return;
-    }
-
     try {
-      await dotenv.load(fileName: '.env');
+      await dotenv.load(
+        fileName: kIsWeb ? 'assets/config/web.env' : '.env',
+      );
     } catch (_) {
       // Prefer compile-time defines so web builds do not ship a public .env file.
     }
