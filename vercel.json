@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bash -lc 'set -euo pipefail; ROOT_DIR=\"$PWD\"; if ! command -v flutter >/dev/null 2>&1; then FLUTTER_DIR=\"$ROOT_DIR/.vercel/flutter\"; if [ ! -d \"$FLUTTER_DIR\" ]; then git clone https://github.com/flutter/flutter.git -b stable --depth 1 \"$FLUTTER_DIR\"; fi; export PATH=\"$PATH:$FLUTTER_DIR/bin\"; fi; cd visitarian_flutter; flutter pub get; flutter build web --release --base-href / --dart-define-from-file=dart-defines.json'",
+  "buildCommand": "bash vercel-build.sh",
   "outputDirectory": "visitarian_flutter/build/web",
   "cleanUrls": true,
   "trailingSlash": false,
