@@ -1,0 +1,460 @@
+{
+  "system": "VisitaRian",
+  "generatedFrom": {
+    "sourceType": "inferred_from_codebase",
+    "database": "Cloud Firestore",
+    "generatedAt": "2026-04-12",
+    "notes": [
+      "This ERD is inferred from Flutter app code, Firestore rules, and storage rules.",
+      "Firestore is schemaless, so fields marked optional may exist only on some documents.",
+      "Singleton appConfig documents are modeled separately because their field sets differ."
+    ]
+  },
+  "entities": [
+    {
+      "name": "users",
+      "kind": "collection",
+      "primaryKey": "uid",
+      "documentIdSource": "Firebase Auth user.uid",
+      "fields": [
+        {
+          "name": "username",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "provider",
+          "type": "string",
+          "required": false,
+          "allowedValues": [
+            "password",
+            "google"
+          ]
+        },
+        {
+          "name": "photoUrl",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "required": false
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "required": false
+        },
+        {
+          "name": "lastLoginAt",
+          "type": "timestamp",
+          "required": false
+        },
+        {
+          "name": "hasSeenOnboarding",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "favorites",
+          "type": "array<string>",
+          "required": false,
+          "references": "places.placeId"
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "required": false,
+          "allowedValues": [
+            "admin",
+            "superadmin",
+            "super_admin"
+          ],
+          "note": "Used for admin detection; normal users cannot self-write this via client rules."
+        },
+        {
+          "name": "admin",
+          "type": "boolean",
+          "required": false,
+          "note": "Used for admin detection; normal users cannot self-write this via client rules."
+        },
+        {
+          "name": "isAdmin",
+          "type": "boolean",
+          "required": false,
+          "note": "Used for admin detection; normal users cannot self-write this via client rules."
+        }
+      ]
+    },
+    {
+      "name": "admins",
+      "kind": "collection",
+      "primaryKey": "adminId",
+      "fields": [
+        {
+          "name": "uid",
+          "type": "string",
+          "required": false,
+          "references": "users.uid"
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "note": "Admin access can be granted by document existence alone, or by matching uid/email fields."
+    },
+    {
+      "name": "places",
+      "kind": "collection",
+      "primaryKey": "placeId",
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "location",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "weatherCondition",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "imageUrl",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "tourId",
+          "type": "string",
+          "required": false,
+          "references": "tours.tourId"
+        },
+        {
+          "name": "distanceKm",
+          "type": "number",
+          "required": false,
+          "note": "Read by the user UI if present, but not written by the current admin flows."
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "required": false
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "favoriteStats",
+      "kind": "collection",
+      "primaryKey": "placeId",
+      "documentIdMatches": "places.placeId",
+      "fields": [
+        {
+          "name": "count",
+          "type": "integer",
+          "required": true,
+          "minimum": 0
+        }
+      ]
+    },
+    {
+      "name": "tours",
+      "kind": "collection",
+      "primaryKey": "tourId",
+      "fields": [
+        {
+          "name": "placeId",
+          "type": "string",
+          "required": false,
+          "references": "places.placeId"
+        },
+        {
+          "name": "startNodeId",
+          "type": "string",
+          "required": false,
+          "references": "tours.nodes.nodeId"
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "tours.nodes",
+      "kind": "subcollection",
+      "parent": "tours",
+      "primaryKey": "nodeId",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "panoUrl",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "previewUrl",
+          "type": "string",
+          "required": false,
+          "note": "Read by the XR player when present; current editor primarily writes panoUrl."
+        },
+        {
+          "name": "order",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "required": false
+        },
+        {
+          "name": "hotspots",
+          "type": "array<xrHotspot>",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "xrHotspot",
+      "kind": "embedded_object",
+      "fields": [
+        {
+          "name": "type",
+          "type": "string",
+          "required": true,
+          "allowedValues": [
+            "info",
+            "teleport"
+          ]
+        },
+        {
+          "name": "yaw",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "pitch",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "note": "Required in practice for info hotspots."
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": false,
+          "note": "Required in practice for info hotspots."
+        },
+        {
+          "name": "toNodeId",
+          "type": "string",
+          "required": false,
+          "references": "tours.nodes.nodeId",
+          "note": "Required in practice for teleport hotspots."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "icon",
+          "type": "string",
+          "required": false,
+          "allowedValues": [
+            "auto",
+            "info",
+            "arrow",
+            "pin",
+            "star",
+            "flag",
+            "camera"
+          ]
+        },
+        {
+          "name": "colorHex",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "size",
+          "type": "number",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "appConfig.mobileDistribution",
+      "kind": "singleton_document",
+      "collection": "appConfig",
+      "documentId": "mobileDistribution",
+      "fields": [
+        {
+          "name": "websiteUrl",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "androidApkUrl",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "latestVersion",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "minSupportedVersion",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "forceUpdate",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "releaseNotes",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "appConfig.tourSelectionHeader",
+      "kind": "singleton_document",
+      "collection": "appConfig",
+      "documentId": "tourSelectionHeader",
+      "fields": [
+        {
+          "name": "discoverTitle",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "discoverSubtitle",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "searchHint",
+          "type": "string",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "user_profile_document",
+      "from": "users",
+      "to": "FirebaseAuthUser",
+      "type": "1:1",
+      "via": "users.uid == auth.uid"
+    },
+    {
+      "name": "admin_membership",
+      "from": "admins",
+      "to": "users",
+      "type": "0..1:1",
+      "via": "admins.uid or admins.email or admins document id"
+    },
+    {
+      "name": "place_has_tour",
+      "from": "places",
+      "to": "tours",
+      "type": "0..1:0..1",
+      "via": "places.tourId <-> tours.placeId"
+    },
+    {
+      "name": "tour_contains_nodes",
+      "from": "tours",
+      "to": "tours.nodes",
+      "type": "1:N",
+      "via": "subcollection"
+    },
+    {
+      "name": "tour_start_node",
+      "from": "tours.startNodeId",
+      "to": "tours.nodes.nodeId",
+      "type": "0..1:1",
+      "via": "reference within same tour"
+    },
+    {
+      "name": "teleport_hotspot_target",
+      "from": "xrHotspot.toNodeId",
+      "to": "tours.nodes.nodeId",
+      "type": "0..1:1",
+      "via": "embedded hotspot reference within same tour"
+    },
+    {
+      "name": "favorite_counter_for_place",
+      "from": "favoriteStats",
+      "to": "places",
+      "type": "1:1",
+      "via": "favoriteStats document id == placeId"
+    },
+    {
+      "name": "user_favorite_places",
+      "from": "users",
+      "to": "places",
+      "type": "M:N",
+      "via": "users.favorites[] contains placeId"
+    }
+  ],
+  "storagePaths": [
+    {
+      "path": "profiles/{userId}/{fileName}",
+      "purpose": "user profile images",
+      "linkedEntity": "users",
+      "linkedField": "photoUrl"
+    },
+    {
+      "path": "tours/{tourId}/{fileName}",
+      "purpose": "XR panorama and media assets",
+      "linkedEntity": "tours.nodes",
+      "linkedFields": [
+        "panoUrl",
+        "previewUrl"
+      ]
+    }
+  ]
+}

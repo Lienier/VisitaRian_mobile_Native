@@ -10,9 +10,18 @@ $trackedVercelConfig = Join-Path $projectRoot "vercel.json"
 $builtVercelConfig = Join-Path $buildOutput "vercel.json"
 $rootVercelDir = Join-Path (Split-Path -Parent $projectRoot) ".vercel"
 $buildVercelDir = Join-Path $buildOutput ".vercel"
+$webEnvAsset = Join-Path $projectRoot "assets/config/web.env"
+$resolvedEnvFile = Join-Path $projectRoot $EnvFile
 
 Push-Location $projectRoot
 try {
+    if (-not (Test-Path $resolvedEnvFile)) {
+        throw "Expected environment file at '$resolvedEnvFile', but it was not found."
+    }
+
+    New-Item -ItemType Directory -Path (Split-Path -Parent $webEnvAsset) -Force | Out-Null
+    Copy-Item -LiteralPath $resolvedEnvFile -Destination $webEnvAsset -Force
+
     flutter build web --dart-define-from-file=$EnvFile
 
     if (-not (Test-Path $buildOutput)) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 import 'package:visitarian_flutter/core/theme/theme.dart';
 import 'package:visitarian_flutter/screens/widgets/tour_selection_styles.dart';
@@ -198,6 +199,28 @@ class TourProfileContent extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+              ),
+              SizedBox(height: verticalSpacing),
+              FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snapshot) {
+                  final version = snapshot.data?.version.trim();
+                  if (version == null || version.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'v$version',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: secondaryTextColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),

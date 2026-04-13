@@ -48,6 +48,7 @@ app.*.map.json
 .env
 .env.*
 !.env.example
+assets/config/web.env
 android/key.properties
 android/app/*.jks
 android/app/*.keystore

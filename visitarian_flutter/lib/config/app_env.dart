@@ -7,6 +7,14 @@ class AppEnv {
   AppEnv._();
 
   static Future<void> load() async {
+    if (kIsWeb) {
+      try {
+        await dotenv.load(fileName: 'assets/config/web.env');
+      } catch (_) {
+        // Web can still rely on --dart-define values when the asset is unavailable.
+      }
+      return;
+    }
     try {
       await dotenv.load(fileName: '.env');
     } catch (_) {

@@ -33,6 +33,7 @@ Build and deploy with:
 
 The script:
 
+- copies `.env` to `assets/config/web.env` so the web app has the same local fallback in production
 - builds the Flutter web app with `--dart-define-from-file`
 - copies the tracked `vercel.json` into `build/web`
 - deploys `build/web` to Vercel production so SPA routes rewrite to `index.html`

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:visitarian_flutter/admin/xr/admin_map_test_screen.dart';
+import 'package:visitarian_flutter/admin/xr/admin_spot_creator_screen.dart';
 import 'package:visitarian_flutter/admin/xr/tour_nodes_screen.dart';
 import 'package:visitarian_flutter/core/services/services.dart';
 
@@ -239,6 +240,8 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
                             controller: apkController,
                             decoration: const InputDecoration(
                               labelText: 'Android APK URL',
+                              helperText:
+                                  'Users will be redirected to this link when they update or download the app.',
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -246,7 +249,7 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
                             controller: latestController,
                             decoration: const InputDecoration(
                               labelText: 'Latest Version',
-                              hintText: '1.0.1',
+                              hintText: '1.0.2',
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -403,6 +406,20 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
             child: OutlinedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AdminSpotCreatorScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('Spot Creator'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AdminMapTestScreen()),
                 );
               },
@@ -483,35 +500,57 @@ class _AdminXrHomeScreenState extends State<AdminXrHomeScreen> {
                   final placeTitle = (data['title'] ?? '').toString();
                   final location = (data['location'] ?? '').toString();
                   final tourId = (data['tourId'] ?? '').toString();
+                  final rawSpot = data['mapSpot'];
+                  final hasMapSpot =
+                      rawSpot is Map &&
+                      rawSpot['latitude'] is num &&
+                      rawSpot['longitude'] is num;
                   final hasTour = tourId.trim().isNotEmpty;
 
                   return Card(
                     child: ListTile(
                       title: Text(placeTitle.isEmpty ? doc.id : placeTitle),
                       subtitle: Text(
-                        'Location: $location\nTour ID: ${hasTour ? tourId : 'Not set'}',
+                        'Location: $location\nTour ID: ${hasTour ? tourId : 'Not set'}\nMap Spot: ${hasMapSpot ? 'Configured' : 'Not set'}',
                       ),
                       isThreeLine: true,
-                      trailing: hasTour
-                          ? FilledButton(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => TourNodesScreen(
-                                      placeId: doc.id,
-                                      tourId: tourId,
-                                    ),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => AdminSpotCreatorScreen(
+                                    initialPlaceId: doc.id,
                                   ),
-                                );
-                              },
-                              child: const Text('Open Editor'),
-                            )
-                          : OutlinedButton(
-                              onPressed: _isCreatingTour
-                                  ? null
-                                  : () => _createTourForPlace(doc.id),
-                              child: const Text('Create Tour'),
-                            ),
+                                ),
+                              );
+                            },
+                            child: const Text('Map Spot'),
+                          ),
+                          hasTour
+                              ? FilledButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => TourNodesScreen(
+                                          placeId: doc.id,
+                                          tourId: tourId,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('Open Editor'),
+                                )
+                              : OutlinedButton(
+                                  onPressed: _isCreatingTour
+                                      ? null
+                                      : () => _createTourForPlace(doc.id),
+                                  child: const Text('Create Tour'),
+                                ),
+                        ],
+                      ),
                     ),
                   );
                 },
